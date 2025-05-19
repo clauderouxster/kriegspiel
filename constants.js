@@ -18,7 +18,6 @@ const Terrain = {
 const HILL_CANDIDATE = -2;
 const SWAMP_CANDIDATE = -3;
 
-
 // Colors for each terrain type
 const TerrainColors = {
     [Terrain.FLAT]: '#8FBC8F',   // Dark Sea Green (Flat)
@@ -53,7 +52,6 @@ const UNIT_IMAGE_PATHS = {
 const ARMY_COLOR_BLUE = '#0000FF'; // Blue Army
 const ARMY_COLOR_RED = '#FF0000';   // Red Army
 
-
 // Base aspect ratio for the map (cols / rows) - determines map shape
 const BASE_ASPECT_RATIO = 1.5;
 
@@ -65,15 +63,14 @@ const CENTER_AREA_PERCENT = 0.5; // 50% of the map center
 
 // Base height used for scaling lake and forest generation parameters
 const BASE_HEIGHT_FOR_LAKE_SCALING = 40; // For a 40-row map, these are the base values
-const BASE_LAKE_SIZE_MIN = 3; // Minimum radius for lakes at base height
-const BASE_LAKE_SIZE_MAX = 8; // Maximum radius for lakes at base height
-const BASE_MAX_LAKES_FACTOR = 0.05; // Max number of lakes as a factor of total hexes (at base height)
+const BASE_LAKE_SIZE_MIN = 2; // Updated: Smaller minimum radius for lakes
+const BASE_LAKE_SIZE_MAX = 10; // Updated: Smaller maximum radius for lakes
+const BASE_MAX_LAKES_FACTOR = 2.0; // Updated: Higher factor to reduce max lakes (e.g., rows / 2.0)
 
 const BASE_HEIGHT_FOR_FOREST_SCALING = 40; // For a 40-row map, these are the base values
 const BASE_FOREST_SIZE_MIN = 5; // Minimum radius for forests at base height
 const BASE_FOREST_SIZE_MAX = 15; // Maximum radius for forests at base height
 const BASE_MAX_FOREST_FACTOR = 0.1; // Max number of forests as a factor of total hexes (at base height)
-
 
 // Rendering constants
 const HEX_SIZE = 20; // Size of each hexagon from center to vertex
@@ -83,12 +80,10 @@ const CLOCK_MARGIN_TOP = 20; // Space from the top of the canvas to the clock
 const CLOCK_RADIUS = 30; // Radius of the analog clock circle
 const CLOCK_HEIGHT = CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2; // Total vertical space for the clock
 
-
 // Game Simulation Constants
 // Real-world milliseconds that equal one game minute
 const MILLISECONDS_PER_GAME_MINUTE = 50; // 50 real ms = 1 game minute (e.g., 1 sec real = 20 game min)
 const MILLISECONDS_PER_GAME_HOUR = MILLISECONDS_PER_GAME_MINUTE * 60;
-
 
 // Movement Costs per hex terrain type for each unit type
 // Infinity means impassable
@@ -125,7 +120,7 @@ const TERRAIN_MOVEMENT_COSTS = {
         [Terrain.LAKE]: Infinity, // Cannot cross lakes
         [Terrain.FOREST]: 2
     },
-     [UnitType.SPY]: { // Espion - ignores most terrain costs except impassable
+    [UnitType.SPY]: { // Espion - ignores most terrain costs except impassable
         [Terrain.FLAT]: 1,
         [Terrain.MOUNTAIN]: 1,
         [Terrain.HILL]: 1,
@@ -133,7 +128,7 @@ const TERRAIN_MOVEMENT_COSTS = {
         [Terrain.LAKE]: Infinity,
         [Terrain.FOREST]: 1
     },
-     [UnitType.GENERAL]: { // Nouveau : Général - vitesse environ 10 (similaire infanterie)
+    [UnitType.GENERAL]: { // Nouveau : Général - vitesse environ 10 (similaire infanterie)
         [Terrain.FLAT]: 1.1, // Légèrement plus lent que l'infanterie sur plat, peut-être?
         [Terrain.MOUNTAIN]: 1, // Ne peut pas traverser les montagnes
         [Terrain.HILL]: 2, // Similaire à l'infanterie sur colline
@@ -142,7 +137,6 @@ const TERRAIN_MOVEMENT_COSTS = {
         [Terrain.FOREST]: 2.2 // Un peu ralenti par les forêts
     }
 };
-
 
 // Base movement capability per game hour (number of "movement cost units" covered per game hour)
 // Higher values mean faster movement
@@ -171,7 +165,7 @@ function calculateMoveDurationGameMinutes(unitType, terrainType) {
     const baseMovementCapabilityPerHour = UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR[unitType];
 
     if (baseMovementCapabilityPerHour === undefined || baseMovementCapabilityPerHour <= 0) {
-         return Infinity; // Cannot move if capability is zero or undefined
+        return Infinity; // Cannot move if capability is zero or undefined
     }
 
     // Time in game hours = Movement Cost / Capability (Cost Units / Cost Units per Hour)
@@ -182,7 +176,6 @@ function calculateMoveDurationGameMinutes(unitType, terrainType) {
 
     return gameMinutes;
 }
-
 
 // Vision Ranges per unit type (distance in hexes)
 const VISION_RANGES = {
@@ -208,7 +201,6 @@ const UNIT_COMBAT_STATS = {
 // I've updated to align with Infantry vision range including mountain bonus, assuming this was an oversight.
 // If Artillery combat range should *only* get a bonus on Hills, revert Artillery range definition to { base: 4, hill: 7 }.
 
-
 // *** Unit Health Points (HP) ***
 const UNIT_HEALTH = {
     [UnitType.ARTILLERY]: 10,
@@ -218,7 +210,6 @@ const UNIT_HEALTH = {
     [UnitType.SPY]: 5, // Spy units are fragile
     [UnitType.GENERAL]: 10 // Nouveau : Général - PV à 10
 };
-
 
 // Combat Damage Scaling Factor
 // Multiplier for the damage calculated in combat resolution
@@ -237,14 +228,9 @@ const UNIT_ARMY_INDICATOR_OFFSET_X = -HEX_SIZE * 0.7; // X offset relative to he
 const UNIT_ARMY_INDICATOR_OFFSET_Y = -HEX_SIZE * 0.4; // Y offset relative to hex center (top)
 const UNIT_ARMY_INDICATOR_RADIUS = HEX_SIZE * 0.2;   // Radius of the army color dot
 
-//const UNIT_ARMY_INDICATOR_OFFSET_X = 0; // X offset relative to hex center (left)
-//const UNIT_ARMY_INDICATOR_OFFSET_Y = -0.8; // Y offset relative to hex center (top)
-//const UNIT_ARMY_INDICATOR_RADIUS = 0.15;   // Radius of the army color dot
-
 // *** Color for combat highlight ***
 const COMBAT_HIGHLIGHT_COLOR = 'rgba(255, 0, 0, 0.5)'; // Red semi-transparent
 const GENERAL_HEX_COLOR = 'rgba(0, 0, 255, 0.5)';
-
 
 // *** Synchronization Interval ***
 let SYNC_INTERVAL_MS = 500; // Sync state every 200 real-world milliseconds
@@ -304,30 +290,30 @@ const MOVEMENT_COSTS = {
         [UnitType.GENERAL]: 2.2 // Nouveau : Général
     },
     // Add UNASSIGNED or other temporary states if needed, assuming they are impassable
-     [Terrain.UNASSIGNED]: {
-         [UnitType.INFANTERY]: Infinity,
-         [UnitType.ARTILLERY]: Infinity,
-         [UnitType.CAVALRY]: Infinity,
-         [UnitType.SUPPLY]: Infinity,
-         [UnitType.SPY]: Infinity,
-         [UnitType.GENERAL]: Infinity // Nouveau : Général
-     },
-      [HILL_CANDIDATE]: { // Assuming candidate states are also impassable
-         [UnitType.INFANTERY]: Infinity,
-         [UnitType.ARTILLERY]: Infinity,
-         [UnitType.CAVALRY]: Infinity,
-         [UnitType.SUPPLY]: Infinity,
-         [UnitType.SPY]: Infinity,
-         [UnitType.GENERAL]: Infinity // Nouveau : Général
-     },
-      [SWAMP_CANDIDATE]: { // Assuming candidate states are also impassable
-         [UnitType.INFANTERY]: Infinity,
-         [UnitType.ARTILLERY]: Infinity,
-         [UnitType.CAVALRY]: Infinity,
-         [UnitType.SUPPLY]: Infinity,
-         [UnitType.SPY]: Infinity,
-         [UnitType.GENERAL]: Infinity // Nouveau : Général
-     },
+    [Terrain.UNASSIGNED]: {
+        [UnitType.INFANTERY]: Infinity,
+        [UnitType.ARTILLERY]: Infinity,
+        [UnitType.CAVALRY]: Infinity,
+        [UnitType.SUPPLY]: Infinity,
+        [UnitType.SPY]: Infinity,
+        [UnitType.GENERAL]: Infinity // Nouveau : Général
+    },
+    [HILL_CANDIDATE]: { // Assuming candidate states are also impassable
+        [UnitType.INFANTERY]: Infinity,
+        [UnitType.ARTILLERY]: Infinity,
+        [UnitType.CAVALRY]: Infinity,
+        [UnitType.SUPPLY]: Infinity,
+        [UnitType.SPY]: Infinity,
+        [UnitType.GENERAL]: Infinity // Nouveau : Général
+    },
+    [SWAMP_CANDIDATE]: { // Assuming candidate states are also impassable
+        [UnitType.INFANTERY]: Infinity,
+        [UnitType.ARTILLERY]: Infinity,
+        [UnitType.CAVALRY]: Infinity,
+        [UnitType.SUPPLY]: Infinity,
+        [UnitType.SPY]: Infinity,
+        [UnitType.GENERAL]: Infinity // Nouveau : Général
+    },
 };
 
 // Ensure all UnitTypes are covered for all defined Terrains.
@@ -338,8 +324,8 @@ for (const terrainType in MOVEMENT_COSTS) {
             const unitValue = UnitType[unitType];
             if (MOVEMENT_COSTS[terrainType][unitValue] === undefined) {
                 console.warn(`Movement cost for Terrain ${terrainType} and UnitType ${unitValue} is undefined in MOVEMENT_COSTS. Defaulting to Infinity.`);
-                 // Optionally set it to Infinity here
-                 // MOVEMENT_COSTS[terrainType][unitValue] = Infinity;
+                // Optionally set it to Infinity here
+                // MOVEMENT_COSTS[terrainType][unitValue] = Infinity;
             }
         }
     }

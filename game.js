@@ -1230,7 +1230,7 @@ function updateDimensionsAndDraw() {
 
     // --- Generate the map ---
     map = generateMap(currentMapRows, currentMapCols, // Uses mapGeneration function
-        MOUNTAIN_PROBABILITY, CENTER_AREA_PERCENT,
+        MOUNTAIN_PROBABILITY,
         BASE_HEIGHT_FOR_LAKE_SCALING, BASE_LAKE_SIZE_MIN, BASE_LAKE_SIZE_MAX, BASE_MAX_LAKES_FACTOR,
         BASE_HEIGHT_FOR_FOREST_SCALING, BASE_FOREST_SIZE_MIN, BASE_FOREST_SIZE_MAX, BASE_MAX_FOREST_FACTOR);
     originalConsoleLog("[updateDimensionsAndDraw] Map generated.");

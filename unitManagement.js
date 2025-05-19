@@ -65,89 +65,6 @@ function createInitialUnits(map, rows, cols, unitCounts) {
     }
 
     // Define starting positions and row offsets for each army for line placement
-    /* These are no longer used for scattering but kept for reference or potential future use.
-    const blueArmyBaseRow = 1; // Base row for Blue Army's first line
-    const redArmyBaseRow = rows - 7; // Base row for Red Army's first line (adjusting from rows - 5 to leave buffer)
-    const blueArmyStartCol = 1; // Starting column for all blue lines
-    const redArmyStartCol = Math.max(1, Math.floor(cols / 2) - Math.floor((unitCounts[UnitType.INFANTERY] || 0)/2) ); // Starting column for all red lines, attempt to center infantry
-    */
-
-    // Define row offsets for each unit type group relative to the base row
-    /* These are no longer used for scattering.
-    const rowOffsets = {
-        [UnitType.SPY]: 0,       // Line 1
-        [UnitType.SUPPLY]: 0,    // Line 1
-        [UnitType.CAVALRY]: 2,   // Line 2
-        [UnitType.INFANTERY]: 4,  // Line 4
-        [UnitType.ARTILLERY]: 6 // Line 3
-    };
-
-     const rowOffsetsRED = {
-        [UnitType.ARTILLERY]: -3, // Line 3
-        [UnitType.INFANTERY]: -1,  // Line 4
-        [UnitType.CAVALRY]: 1,   // Line 2
-        [UnitType.SPY]: 3,       // Line 1
-        [UnitType.SUPPLY]: 3    // Line 1
-    };
-    */
-
-    // Keep track of the next available column for each row and army for line placement
-    /* These are no longer used for scattering.
-    const nextBlueCol = {};
-    const nextRedCol = {};
-    */
-
-    // Initialize next available columns for the relevant rows for Blue Army (excluding General)
-    /* This initialization is no longer needed for scattering.
-    for (const unitType in rowOffsets) {
-        const offset = rowOffsets[unitType];
-        const blueRow = blueArmyBaseRow + offset;
-        // Ensure the row is within bounds before initializing
-        if (blueRow >= 0 && blueRow < rows) {
-             if (!nextBlueCol[blueRow]) {
-                 // For the first unit in a row, calculate a centered start if possible, otherwise use blueArmyStartCol
-                 const totalUnitsInRow = (blueUnitsByType[UnitType.SPY]?.length || 0) + (blueUnitsByType[UnitType.SUPPLY]?.length || 0) // Approx count for line 1
-                                        + (blueUnitsByType[UnitType.CAVALRY]?.length || 0) // Approx count for line 2
-                                        + (blueUnitsByType[UnitType.ARTILLERY]?.length || 0) // Approx count for line 3
-                                        + (blueUnitsByType[UnitType.INFANTERY]?.length || 0); // Approx count for line 4 (excluding general here)
-                 let calculatedStartCol = blueArmyStartCol;
-                 if (totalUnitsInRow > 0 && cols > totalUnitsInRow) {
-                     // Attempt to center the line if there's enough space
-                     calculatedStartCol = Math.max(0, Math.floor((cols - totalUnitsInRow) / 2)); // Ensure col is not negative
-                 }
-                nextBlueCol[blueRow] = calculatedStartCol;
-             }
-        } else {
-             originalConsoleWarn(`[createInitialUnits] Blue Army row ${blueRow} calculated out of map bounds (${rows} rows). Units for this line might not be placed.`);
-        }
-    }
-    */
-
-    // Initialize next available columns for the relevant rows for Red Army (excluding General)
-    /* This initialization is no longer needed for scattering.
-     for (const unitType in rowOffsetsRED) {
-        const offset = rowOffsetsRED[unitType];
-        const redRow = redArmyBaseRow + offset;
-        // Ensure the row is within bounds before initializing
-        if (redRow >= 0 && redRow < rows) {
-             if (!nextRedCol[redRow]) {
-                 // For the first unit in a row, calculate a centered start if possible, otherwise use redArmyStartCol
-                 const totalUnitsInRow = (redUnitsByType[UnitType.SPY]?.length || 0) + (redUnitsByType[UnitType.SUPPLY]?.length || 0) // Approx count for line 1
-                                         + (redUnitsByType[UnitType.CAVALRY]?.length || 0) // Approx count for line 2
-                                         + (redUnitsByType[UnitType.ARTILLERY]?.length || 0) // Approx count for line 3
-                                         + (redUnitsByType[UnitType.INFANTERY]?.length || 0); // Approx count for line 4 (excluding general here)
-                 let calculatedStartCol = redArmyStartCol;
-                 if (totalUnitsInRow > 0 && cols > totalUnitsInRow) {
-                     // Attempt to center the line if there's enough space
-                     calculatedStartCol = Math.max(0, Math.floor((cols - totalUnitsInRow) / 2)); // Ensure col is not negative
-                 }
-                nextRedCol[redRow] = calculatedStartCol;
-             }
-        } else {
-            originalConsoleWarn(`[createInitialUnits] Red Army row ${redRow} calculated out of map bounds (${rows} rows). Units for this line might not be placed.`);
-        }
-    }
-    */
 
     const mapHalf = Math.floor(rows / 2);
     const mapQuarter = Math.floor(rows / 4);
@@ -183,7 +100,9 @@ function createInitialUnits(map, rows, cols, unitCounts) {
                 const randomRow = Math.floor(Math.random() * mapQuarter); // Random row within blue quarter (0 to rows/4 - 1)
                 const randomCol = Math.floor(Math.random() * cols);   // Random column anywhere
 
-                if (isValid(randomRow, randomCol, rows, cols) && !isOccupied(randomRow, randomCol)) {
+                if (isValid(randomRow, randomCol, rows, cols) && 
+                    !isOccupied(randomRow, randomCol) &&
+                    map[randomRow][randomCol] !== Terrain.LAKE) {
                     const initialHealth = UNIT_HEALTH[unitType] !== undefined ? UNIT_HEALTH[unitType] : 1;
 
                     initialUnits.push({
@@ -268,7 +187,9 @@ function createInitialUnits(map, rows, cols, unitCounts) {
                 const randomRow = rows - mapQuarter + Math.floor(Math.random() * mapQuarter); // Random row within red quarter (rows - rows/4 to rows - 1)
                 const randomCol = Math.floor(Math.random() * cols);   // Random column anywhere
 
-                if (isValid(randomRow, randomCol, rows, cols) && !isOccupied(randomRow, randomCol)) {
+                if (isValid(randomRow, randomCol, rows, cols) && 
+                    !isOccupied(randomRow, randomCol) &&
+                    map[randomRow][randomCol] !== Terrain.LAKE) {
                     const initialHealth = UNIT_HEALTH[unitType] !== undefined ? UNIT_HEALTH[unitType] : 1;
 
                     initialUnits.push({
@@ -319,7 +240,9 @@ function createInitialUnits(map, rows, cols, unitCounts) {
             const randomRow = Math.floor(Math.random() * Math.max(0, mapQuarter - 3)); // Rows 0 to rows/4 - 4, with buffer
             const randomCol = Math.floor(Math.random() * cols);   // Columns 0 to cols - 1
 
-            if (isValid(randomRow, randomCol, rows, cols) && !isOccupied(randomRow, randomCol)) {
+            if (isValid(randomRow, randomCol, rows, cols) && 
+                !isOccupied(randomRow, randomCol) &&
+                map[randomRow][randomCol] !== Terrain.LAKE) {
                  const initialHealth = UNIT_HEALTH[UnitType.GENERAL] !== undefined ? UNIT_HEALTH[UnitType.GENERAL] : 1;
                 initialUnits.push({
                     id: unitIdCounter++,
@@ -355,7 +278,9 @@ function createInitialUnits(map, rows, cols, unitCounts) {
             const randomRow = rows - mapQuarter + 3 + Math.floor(Math.random() * Math.max(0, mapQuarter - 3)); // Rows rows - rows/4 + 3 to rows - 1, with buffer
             const randomCol = Math.floor(Math.random() * cols);   // Columns 0 to cols - 1
 
-            if (isValid(randomRow, randomCol, rows, cols) && !isOccupied(randomRow, randomCol)) {
+            if (isValid(randomRow, randomCol, rows, cols) && 
+                !isOccupied(randomRow, randomCol) &&
+                map[randomRow][randomCol] !== Terrain.LAKE) {
                  const initialHealth = UNIT_HEALTH[UnitType.GENERAL] !== undefined ? UNIT_HEALTH[UnitType.GENERAL] : 1;
                 initialUnits.push({
                     id: unitIdCounter++,
