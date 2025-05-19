@@ -189,8 +189,8 @@ const VISION_RANGES = {
 
 // Combat Stats and Ranges per unit type
 const UNIT_COMBAT_STATS = {
-    [UnitType.ARTILLERY]: { attack: 15, defense: 15, range: { base: 5, hill_mountain: 7 } }, // 7 cases sur colline/montagne, 4 partout ailleurs (pas de bonus montagne?) - Assuming Hill bonus applies only to hills as per prompt, adjusted to hill_mountain based on vision
-    [UnitType.INFANTERY]: { attack: 10, defense: 10, range: { base: 3, hill_mountain: 5 } }, // 5 cases sur colline ou montagne, 3 partout ailleurs
+    [UnitType.ARTILLERY]: { attack: 15, defense: 15, range: { base: 3, hill_mountain: 4 } }, // 4 cases sur colline/montagne, 3 partout ailleurs (pas de bonus montagne?) - Assuming Hill bonus applies only to hills as per prompt, adjusted to hill_mountain based on vision
+    [UnitType.INFANTERY]: { attack: 10, defense: 10, range: { base: 2, hill_mountain: 3 } }, // 3 cases sur colline ou montagne, 2 partout ailleurs
     [UnitType.CAVALRY]: { attack: 15, defense: 10, range: { base: 1 } }, // 1 case partout (contact)
     [UnitType.SUPPLY]: { attack: 1, defense: 2, range: { base: 1 } }, // 1 case partout
     [UnitType.SPY]: { attack: 1, defense: 1, range: { base: 1 } }, // 1 case partout
@@ -233,7 +233,7 @@ const COMBAT_HIGHLIGHT_COLOR = 'rgba(255, 0, 0, 0.5)'; // Red semi-transparent
 const GENERAL_HEX_COLOR = 'rgba(0, 0, 255, 0.5)';
 
 // *** Synchronization Interval ***
-let SYNC_INTERVAL_MS = 500; // Sync state every 200 real-world milliseconds
+let SYNC_INTERVAL_MS = 200; // Sync state every 200 real-world milliseconds
 
 const STARTING_AREA_PERCENT = 0.1;
 
@@ -250,7 +250,7 @@ const MOVEMENT_COSTS = {
         [UnitType.GENERAL]: 1.1 // Nouveau : Général
     },
     [Terrain.MOUNTAIN]: {
-        [UnitType.INFANTERY]: Infinity, // Impassable for most
+        [UnitType.INFANTERY]: 3, // Impassable for most
         [UnitType.ARTILLERY]: Infinity,
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
