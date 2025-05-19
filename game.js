@@ -2274,8 +2274,8 @@ function gameLoop(currentTime) {
 
             if (lesBleus && lesRouges) {
                 // Iterate through all living units to check for engagements FROM them
-                lesBleus.forEach(unitA => {
-                    const unitAStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitA.id);
+                lesBleus.forEach(unitBlue => {
+                    const unitAStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitBlue.id);
                     if (!unitAStillExistsAndAlive)
                         return;
 
@@ -2284,29 +2284,29 @@ function gameLoop(currentTime) {
                     // Combat logic is symmetric and calculates attack/defense for both sides regardless of who initiates.
 
                     let attackerParticipatingUnits = new Set();
-                    const rangeA = getEffectiveCombatRange(unitA, UNIT_COMBAT_STATS, UnitType);
+                    const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
 
                     let firstDefender = null;
                     //First, we look for all enemy units within firing range
                     let defenderParticipatingUnits = new Set();
-                    lesRouges.forEach(unitB => {
-                        const unitBStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitB.id);
-                        if (unitBStillExistsAndAlive) {
-                            const dst = getHexDistance(unitA.row, unitA.col, unitB.row, unitB.col);
+                    lesRouges.forEach(unitRed => {
+                        const unitRedStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitRed.id);
+                        if (unitRedStillExistsAndAlive) {
+                            const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
                             //Unit B is in range, we keep it
-                            if (dst <= rangeA) {
-                                defenderParticipatingUnits.add(unitB);
+                            if (dst <= rangeBlue) {
+                                defenderParticipatingUnits.add(unitRed);
                                 if (firstDefender == null) {
-                                    firstDefender = unitB;
+                                    firstDefender = unitRed;
                                 }
                             }
                             else {
-                                //We still check if our unit is threatened by unitB
-                                const rangeB = getEffectiveCombatRange(unitB, UNIT_COMBAT_STATS, UnitType);
-                                if (dst <= rangeB) {
-                                    defenderParticipatingUnits.add(unitB);
+                                //We still check if our unit is threatened by unitRed
+                                const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
+                                if (dst <= rangeRed) {
+                                    defenderParticipatingUnits.add(unitRed);
                                     if (firstDefender == null) {
-                                        firstDefender = unitB;
+                                        firstDefender = unitRed;
                                     }
                                 }
                             }
@@ -2318,42 +2318,48 @@ function gameLoop(currentTime) {
                         return;
                     }
 
-                    attackerParticipatingUnits.add(unitA);
+                    attackerParticipatingUnits.add(unitBlue);
                     //We then check for these potential targets, if there other units involved
-                    defenderParticipatingUnits.forEach(unitB => {
-                        const rangeB = getEffectiveCombatRange(unitB, UNIT_COMBAT_STATS, UnitType);
-                        lesBleus.forEach(unit => {
-                            const unitStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unit.id);
-                            if (unitStillExistsAndAlive && !attackerParticipatingUnits.has(unit)) {
-                                const dst = getHexDistance(unit.row, unit.col, unitB.row, unitB.col);
-                                //The unit is in range, we keep it
-                                if (dst <= rangeB) {
-                                    attackerParticipatingUnits.add(unit);
-                                    const range = getEffectiveCombatRange(unit, UNIT_COMBAT_STATS, UnitType);
-                                    lesRouges.forEach(unitB => {
-                                        const unitBStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitB.id);
-                                        if (unitBStillExistsAndAlive && !defenderParticipatingUnits.has(unitB)) {
-                                            const dst = getHexDistance(unit.row, unit.col, unitB.row, unitB.col);
-                                            //Unit B is in range, we keep it
-                                            if (dst <= range) {
-                                                defenderParticipatingUnits.add(unitB);
-                                                const range = getEffectiveCombatRange(unitB, UNIT_COMBAT_STATS, UnitType);
-                                                lesBleus.forEach(unitA => {
-                                                    const unitAStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitA.id);
-                                                    if (unitAStillExistsAndAlive && !attackerParticipatingUnits.has(unitA)) {
-                                                        const dst = getHexDistance(unitA.row, unitA.col, unitB.row, unitB.col);
-                                                        if (dst <= range) {
-                                                            attackerParticipatingUnits.add(unitA);
-                                                        }
-                                                    }
-                                                });
-                                            }
-                                        }
-                                    });
+                    let loopunit = true;
+                    let newDefenders = defenderParticipatingUnits;
+                    while (loopunit) {           
+                        let newAttackers = new Set();             
+                        newDefenders.forEach(unitRed => {
+                            const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
+                            lesBleus.forEach(unitBlue => {
+                                const unitStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitBlue.id);
+                                if (unitStillExistsAndAlive && !attackerParticipatingUnits.has(unitBlue)) {
+                                    const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
+                                    //The unit is in range, we keep it
+                                    if (dst <= rangeRed) {
+                                        attackerParticipatingUnits.add(unitBlue);
+                                        newAttackers.add(unitBlue);
+                                    }
                                 }
-                            }
+                            });
                         });
-                    });
+                        if (!newAttackers.size)
+                            loopunit = false;
+                        else {
+                            newDefenders = new Set();
+                            newAttackers.forEach(unitBlue => {
+                                const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
+                                lesRouges.forEach(unitRed => {
+                                    const unitStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitRed.id);
+                                    if (unitStillExistsAndAlive && !defenderParticipatingUnits.has(unitRed)) {
+                                        const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
+                                        //The unit is in range, we keep it
+                                        if (dst <= rangeBlue) {
+                                            defenderParticipatingUnits.add(unitRed);
+                                            newDefenders.add(unitRed);
+                                        }
+                                    }
+                                });
+                            });
+                        }
+                        if (!newDefenders)
+                            loopunit = false;
+                    }
 
                     skip = false;
                     attackerParticipatingUnits.forEach(unit => {
@@ -2386,10 +2392,10 @@ function gameLoop(currentTime) {
                         attackerParticipatingUnits = defenderParticipatingUnits;
                         defenderParticipatingUnits = attack;
                         firstAttacker = firstDefender;
-                        firstDefender = unitA;
+                        firstDefender = unitBlue;
                     }
                     else
-                        firstAttacker = unitA;
+                        firstAttacker = unitBlue;
 
                     // Combat Engagement! Mutual engagement confirmed.
 
