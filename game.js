@@ -2283,42 +2283,54 @@ function gameLoop(currentTime) {
                     // This simplifies the N^2 check, only need to check Blue units vs Red units.
                     // Combat logic is symmetric and calculates attack/defense for both sides regardless of who initiates.
 
-                    let attackerParticipatingUnits = new Set();
-                    const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
+                    let attackerParticipatingUnits = new Set();                    
 
                     let firstDefender = null;
                     //First, we look for all enemy units within firing range
                     let defenderParticipatingUnits = new Set();
-                    lesRouges.forEach(unitRed => {
-                        const unitRedStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitRed.id);
-                        if (unitRedStillExistsAndAlive) {
-                            const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
-                            //Unit B is in range, we keep it
-                            if (dst <= rangeBlue) {
-                                defenderParticipatingUnits.add(unitRed);
-                                if (firstDefender == null) {
-                                    firstDefender = unitRed;
-                                }
-                            }
-                            else {
-                                //We still check if our unit is threatened by unitRed
-                                const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
-                                if (dst <= rangeRed) {
+                    const hexvoisins = getNeighbors(unitBlue.row, unitBlue.col, currentMapRows, currentMapCols);
+                    voisins = new Set();
+                    voisins.add(unitBlue);
+                    hexvoisins.forEach(pos => {
+                        lesBleus.forEach(unitBlue => {                        
+                            if (unitBlue.row == pos[0] && unitBlue.col == pos[1])
+                                voisins.add(unitBlue);
+                        });
+                    });                    
+                    voisins.forEach(unitBlue => {
+                        const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
+                        lesRouges.forEach(unitRed => {
+                            const unitRedStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unitRed.id);
+                            if (unitRedStillExistsAndAlive) {
+                                const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
+                                //Unit B is in range, we keep it
+                                if (dst <= rangeBlue) {
                                     defenderParticipatingUnits.add(unitRed);
+                                    attackerParticipatingUnits.add(unitBlue);
                                     if (firstDefender == null) {
                                         firstDefender = unitRed;
                                     }
                                 }
+                                else {
+                                    //We still check if our unit is threatened by unitRed
+                                    const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
+                                    if (dst <= rangeRed) {
+                                        defenderParticipatingUnits.add(unitRed);
+                                        attackerParticipatingUnits.add(unitBlue);
+                                        if (firstDefender == null) {
+                                            firstDefender = unitRed;
+                                        }
+                                    }
+                                }
                             }
-                        }
+                        });
                     });
 
                     //No threat to this unit
                     if (defenderParticipatingUnits.size == 0) {
                         return;
                     }
-
-                    attackerParticipatingUnits.add(unitBlue);
+                    
                     //We then check for these potential targets, if there other units involved
                     let loopunit = true;
                     let newDefenders = defenderParticipatingUnits;

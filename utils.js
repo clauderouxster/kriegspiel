@@ -34,49 +34,35 @@ function isValid(r, c, rows, cols) {
 
 /**
  * Gets the grid coordinates [row, col] of all valid neighbors for a hex at [r, c].
- * Uses a pointy-top hex layout with odd-row staggering (row/column array representation).
- * Depends on isValid from utils.js.
+ * Assumes a pointy-top hexagonal grid with odd-row staggering (row/column array).
+ * Depends on isValid function to check coordinate validity.
+ * @param {number} r - Row of the hex.
+ * @param {number} c - Column of the hex.
+ * @param {number} rows - Total number of rows in the grid.
+ * @param {number} cols - Total number of columns in the grid.
+ * @returns {number[][]} Array of [row, col] coordinates for valid neighbors.
  */
 function getNeighbors(r, c, rows, cols) {
     const neighbors = [];
-    // Offsets for pointy-top hexes in a staggered grid (row/col array)
-    // The offsets depend on whether the row is even or odd (odd-row staggering).
-    // Source: https://www.redblobgames.com/grids/hexagons/#neighbors-axial
-    // Converted from axial neighbor offsets to row/col array offsets
-
-    const offsets = r % 2 === 0
-        ? [ // Even rows (r is even)
-            [-1, 0], [-1, 1], // Up-left, Up-right
-            [0, -1], [0, 1],   // Left, Right
-            [1, 0], [1, 1]    // Down-left, Down-right
-        ]
-        : [ // Odd rows (r is odd)
-            [-1, -0], [-1, 0],  // Up-left, Up-right (Careful: [-1,0] vs [-1,0] depending on definition, let's use standard for odd rows below)
-            // Corrected offsets for odd rows based on standard odd-row staggering:
-            [-1, -1], [-1, 0],  // Up-left, Up-right
-            [0, -1], [0, 1],   // Left, Right
-            [1, -1], [1, 0]    // Down-left, Down-right
-        ];
-
-    // Let's use the clear standard offsets for pointy-top, odd-row staggering array (r, c):
+    
+    // Offsets for pointy-top hexes with odd-row staggering
+    // Directions: up-left, up-right, left, right, down-left, down-right
     const dr_even = [-1, -1, 0, 0, 1, 1];
-    const dc_even = [0, 1, -1, 1, 0, 1]; // Corrected for pointy-top even rows
-
+    const dc_even = [0, 1, -1, 1, 0, 1];
     const dr_odd = [-1, -1, 0, 0, 1, 1];
-    const dc_odd = [-1, 0, -1, 1, -1, 0]; // Corrected for pointy-top odd rows
-
+    const dc_odd = [-1, 0, -1, 1, -1, 0];
 
     const dr = r % 2 === 0 ? dr_even : dr_odd;
     const dc = r % 2 === 0 ? dc_even : dc_odd;
 
-
     for (let i = 0; i < 6; i++) {
         const neighborR = r + dr[i];
         const neighborC = c + dc[i];
-        if (isValid(neighborR, neighborC, rows, cols)) { // Uses isValid
+        if (isValid(neighborR, neighborC, rows, cols)) {
             neighbors.push([neighborR, neighborC]);
         }
     }
+    
     return neighbors;
 }
 
