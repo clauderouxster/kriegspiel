@@ -41,6 +41,8 @@ const UnitType = {
     GENERAL: 5      // Général
 };
 
+SOUND_TRUMPET_PATH = 'images/trumpet.mp3';
+
 // File paths for unit images
 const UNIT_IMAGE_PATHS = {
     [UnitType.INFANTERY]: 'images/infanterie.png',
@@ -222,6 +224,7 @@ const COMBAT_RANDOMNESS_FACTOR = 0.1;
 // Combat Resolution Interval (in game minutes)
 // How often the game loop checks for and resolves combat engagements
 const COMBAT_INTERVAL_GAME_MINUTES = 50; // Example: every 10 game minutes
+const TRUMPET_INTERVAL_GAME_MINUTES = 500; // Example: every 10 game minutes
 
 // Fog of War Color (used for drawing unseen hexes)
 const FOG_COLOR = '#A9A9A9'; // Dark Grey

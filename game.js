@@ -18,6 +18,10 @@ let currentMapRows; // Dynamic map height (Set by mapGeneration.js)
 let currentMapCols; // Dynamic map width (Set by mapGeneration.js)
 let currentUnits = []; // Array to hold the currently placed units (Populated by unitManagement.js)
 
+let audioContext;
+let trumpetBuffer;
+let allUnitInvolvedCombat = new Set();
+
 let messageEndGame = null;
 let messageChat = null;
 
@@ -223,6 +227,9 @@ function connectToServer() {
                     originalConsoleLog("[ws.onmessage] Red client received GAME_OVER message from Blue.");
                     handleGameOver(data.outcome); // Handle the game over state for Red
                 }
+                break;
+            case 'PLAY_SOUND':
+                playTrumpetSound();
                 break;
             case 'PLAYER_LEFT':
                 console.warn(`${data.army === 'blue' ? 'The Blue player' : 'The Red player'} has left the game.`);
@@ -1085,6 +1092,38 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
 // Accesses global unitImages, imagesLoadedCount, totalImagesToLoad, allImagesLoaded
 // Uses originalConsoleLog, originalConsoleError
 // ============================================================================
+
+// --- Function to load a single audio file ---
+async function loadAudio(url) {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    return audioBuffer;
+}
+
+// --- Function to play the trumpet sound ---
+function playTrumpetSound() {
+    if (trumpetBuffer && audioContext) {
+        const source = audioContext.createBufferSource();
+        source.buffer = trumpetBuffer;
+        source.connect(audioContext.destination);
+        source.start(0); // Play immediately
+    }
+}
+
+async function loadSounds() {
+    // Initialize AudioContext
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Load sound
+    try {
+        trumpetBuffer = await loadAudio(SOUND_TRUMPET_PATH); // Assuming SOUND_TRUMPET_PATH is defined in constants.js
+        console.log("Trumpet sound loaded successfully.");
+    } catch (error) {
+        console.error("Error loading trumpet sound:", error);
+    }
+}
+
 /**
  * Loads all unit images asynchronously. Calls a callback when all images are loaded.
  * Depends on UNIT_IMAGE_PATHS from constants.js.
@@ -1096,6 +1135,7 @@ function loadUnitImages(callback) {
     imagesLoadedCount = 0;
     allImagesLoaded = false;
 
+    loadSounds();
     // If there are no images to load, just call the callback immediately
     if (totalImagesToLoad === 0) {
         allImagesLoaded = true;
@@ -2252,6 +2292,8 @@ function gameLoop(currentTime) {
     // --- Combat Time Tracking and Resolution ---
     // This section runs ONLY on the Blue client, as it is the combat authority.
     // Only process combat if the game is NOT over
+    
+
     if (!gameOver && playerArmyColor === ARMY_COLOR_BLUE) {
         if (gameTimeInMinutes >= lastCombatGameTimeInMinutes + COMBAT_INTERVAL_GAME_MINUTES) {
             originalConsoleLog(`[gameLoop] ${COMBAT_INTERVAL_GAME_MINUTES} game minutes elapsed. Initiating combat checks (Blue Client).`);
@@ -2275,6 +2317,7 @@ function gameLoop(currentTime) {
                 (unit.armyColor === ARMY_COLOR_RED)
             );
 
+            let oneCombat = false;
             if (lesBleus && lesRouges) {
                 // Iterate through all living units to check for engagements FROM them
                 lesBleus.forEach(unitBlue => {
@@ -2330,10 +2373,12 @@ function gameLoop(currentTime) {
                     });
 
                     //No threat to this unit
-                    if (defenderParticipatingUnits.size == 0) {
+                    if (defenderParticipatingUnits.size == 0) {                        
                         return;
                     }
                     
+                    oneCombat = true;
+
                     //We then check for these potential targets, if there other units involved
                     let loopunit = true;
                     let newDefenders = defenderParticipatingUnits;
@@ -2383,22 +2428,30 @@ function gameLoop(currentTime) {
                         }
                         else {
                             engagementsProcessedBleu.add(unit);
+                            allUnitInvolvedCombat.add(unit);
                         }
                     });
                     if (skip)
                         return;
 
+                    const nb = allUnitInvolvedCombat.size; 
                     defenderParticipatingUnits.forEach(unit => {
                         if (engagementsProcessedRouge.has(unit)) {
                             skip = true;
                         }
                         else {
                             engagementsProcessedRouge.add(unit);
+                            allUnitInvolvedCombat.add(unit);
                         }
                     });
                     if (skip)
                         return;
 
+                    if (nb < allUnitInvolvedCombat.size) {
+                        playTrumpetSound();
+                        ws.send(JSON.stringify({ type: 'PLAY_SOUND' }));
+                    }
+                    
                     //If the red are in the blue camp
                     //The red are then the attacker...
                     let firstAttacker;
@@ -2510,7 +2563,7 @@ function gameLoop(currentTime) {
                                     ws.send(JSON.stringify({ type: 'GAME_OVER', outcome: 'blue' }));
                                     originalConsoleLog("[gameLoop] Blue Client: Sent GAME_OVER (win) message to server.");
                                 }
-                            }
+                            }                            
                             // If a general was eliminated and game is over, no need to process more combat instances in this interval
                             return; // Exit the forEach for unitB
                         }
@@ -2559,9 +2612,8 @@ function gameLoop(currentTime) {
                     if (gameOver) return; // Exit the forEach for unitA
                 });
             }
-            //originalConsoleLog("[gameLoop] End of combat checks for this interval (Blue Client).");
-            // The combat hexes highlight remains until the next combat check interval
-            // Redraw will show the highlights if visible.
+            if (oneCombat == false)
+                allUnitInvolvedCombat.clear();
         } //else if (!gameOver) { // Not in a combat interval AND game not over
             // Not in a combat interval, ensure combat highlights are cleared on Blue's side
             //if (combatHexes.size > 0) {
@@ -3814,3 +3866,4 @@ function sendChatMessage() {
         chatInput.focus(); // Keep focus on the input field
     }
 }
+
