@@ -2222,6 +2222,8 @@ function gameLoop(currentTime) {
                         break; // Exit the while loop for this unit (reached target)
                     }
 
+                    //If the unit goes back to a previous position, we stop to avoid
+                    //the unit to wander around
                     if (!movedHexUnit.has(unit))
                         movedHexUnit.set(unit,[[nextR, nextC]]);
                     else {
