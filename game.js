@@ -842,9 +842,7 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
                 ctx.font = '20px sans-serif';
                 ctx.fillStyle = '#333';
                 let message = "Connect to the server to start";
-                if (playerArmyColor !== null) {
-                    message = playerArmyColor === ARMY_COLOR_BLUE ? "Waiting for Red player..." : "Waiting for initial game state...";
-                }
+                message = playerArmyColor === ARMY_COLOR_BLUE ? "Waiting for Red player..." : "Waiting for initial game state...";
                 ctx.fillText(message, canvas.width / 2, canvas.height / 2);
             }
         }
@@ -950,20 +948,7 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
             } else {
                 // Draw fogged hex - ONLY draw fog if playerArmyColor is defined (multiplayer)
                 // In single player, visibleHexes is always true.
-                if (playerArmyColor !== null) {
-                    drawHex(ctx, x, y, size, FOG_COLOR); // Use FOG_COLOR constant, drawing function
-                } else {
-                    // If playerArmyColor is null, it's single player mode or not yet assigned.
-                    // In single player, there is no fog, draw the terrain.
-                    const terrainType = map[r][c];
-                    let displayTerrainType = terrainType;
-                    if (displayTerrainType < 0) {
-                        displayTerrainType = Terrain.FLAT;
-                    }
-                    const color = terrainColors[displayTerrainType];
-                    drawHex(ctx, x, y, size, color);
-                }
-
+                drawHex(ctx, x, y, size, FOG_COLOR); // Use FOG_COLOR constant, drawing function
             }
         }
     }
@@ -1004,7 +989,7 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
             // Check if the current unit in the loop belongs to the player's army (or playerArmyColor is null)
             // AND if the unit's hex is visible (checking for row and column existence in visibleHexes)
             // AND if the unit's hex is NOT currently in combat
-            if ((unit.armyColor === playerArmyColor || playerArmyColor === null) &&
+            if (unit.armyColor === playerArmyColor&&
                 visibleHexes[unit.row] &&
                 visibleHexes[unit.row][unit.col] &&
                 !combatHexes.has(`${unit.row},${unit.col}`)) {
@@ -1209,7 +1194,6 @@ function updateDimensionsAndDraw() {
     originalConsoleLog("[updateDimensionsAndDraw] Starting map generation and unit placement.");
 
     // *** NEW : Block generation if the client is not Blue in multiplayer ***
-    // This function should only run if it's a single-player game (playerArmyColor === null)
     // or if it's the Blue player triggering it (e.g., via Start button after Red connects).
     // The regenerate button is disabled for Red, but the mapHeightSelect changes can still trigger this.
     // If Red changes map height, this function will run, but it should send a message to Blue
@@ -1354,16 +1338,6 @@ function updateDimensionsAndDraw() {
         // Hide the Start button after the game starts
         if (startButton) startButton.style.display = 'none';
 
-    } else if (playerArmyColor === null) {
-        // If in single-player (playerArmyColor === null), map/units were generated locally.
-        // Ensure the game loop is running if we are in a single player scenario after regeneration.
-        if (gameLoopInterval === null) {
-            originalConsoleLog("[updateDimensionsAndDraw] Single player mode, starting game loop after regeneration.");
-            lastRealTime = performance.now(); // Initialize lastRealTime for single player
-            gameLoopInterval = requestAnimationFrame(gameLoop); // <-- START THE GAME LOOP HERE FOR SINGLE PLAYER
-        }
-        // In single player, the "Regenerate" button acts as a kind of start/restart
-        // No start button logic needed here for single player.
     }
     // *** END NEW ***
 
@@ -1864,118 +1838,104 @@ function updateVisibility() {
     // *** NEW: Check if playerArmyColor is defined before calculating visibility ***
     // If playerArmyColor is null, it's either the start (not yet assigned)
     // or single-player mode. In single-player mode, visibility is total (no fog).
-    if (playerArmyColor === null) {
-        // Assume full visibility in single-player mode or before assignment
-        // originalConsoleLog("[updateVisibility] playerArmyColor is null. Assuming full visibility (single player mode)."); // *** IMPROVED LOGGING ***
-        if (currentMapRows > 0 && currentMapCols > 0) {
-            for (let r = 0; r < currentMapRows; r++) {
-                for (let c = 0; c < currentMapCols; c++) {
-                    visibleHexes[r][c] = true;
-                }
+    if (!map || !currentUnits || currentUnits.length === 0) { // Check if map or units exist
+        originalConsoleLog(`[updateVisibility] Map or units not initialized or no units remaining for ${playerArmyColor} army. No visibility calculated via BFS.`); // *** IMPROVED LOGGING ***
+        // Continue to the next block to ensure own hexes are visible even if no general visibility is spread
+    } else {
+
+        // Filter units to only include the local player's army for visibility calculation
+        // *** MODIFICATION HERE: Use playerArmyColor instead of ARMY_COLOR_BLUE ***
+        const playerUnits = currentUnits.filter(unit => unit && unit.armyColor === playerArmyColor && unit.health > 0); // Use global playerArmyColor, check health
+
+        // originalConsoleLog(`[updateVisibility] Calculating visibility for ${playerUnits.length} player units (${playerArmyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} Army) via BFS.`); // *** IMPROVED LOGGING TOO CHATTY***
+
+
+        playerUnits.forEach(unit => {
+            // Add unit existence check
+            if (!unit) return;
+
+            const unitR = unit.row;
+            const unitC = unit.col;
+            const unitType = unit.type;
+
+            if (!isValid(unitR, unitC, currentMapRows, currentMapCols)) { // Uses utils function, global dims
+                originalConsoleWarn(`[updateVisibility] Skipping visibility for invalid unit position at (${unitR}, ${unitC}) for unit ID ${unit.id}.`); // *** IMPROVED LOGGING ***
+                return;
             }
-        }
-    } else { // playerArmyColor is set (multiplayer)
 
-        if (!map || !currentUnits || currentUnits.length === 0) { // Check if map or units exist
-            originalConsoleLog(`[updateVisibility] Map or units not initialized or no units remaining for ${playerArmyColor} army. No visibility calculated via BFS.`); // *** IMPROVED LOGGING ***
-            // Continue to the next block to ensure own hexes are visible even if no general visibility is spread
-        } else {
+            const terrainAtUnitHex = map[unitR][unitC]; // Uses global map
 
-            // Filter units to only include the local player's army for visibility calculation
-            // *** MODIFICATION HERE: Use playerArmyColor instead of ARMY_COLOR_BLUE ***
-            const playerUnits = currentUnits.filter(unit => unit && unit.armyColor === playerArmyColor && unit.health > 0); // Use global playerArmyColor, check health
-
-            // originalConsoleLog(`[updateVisibility] Calculating visibility for ${playerUnits.length} player units (${playerArmyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} Army) via BFS.`); // *** IMPROVED LOGGING TOO CHATTY***
+            let visionRange = VISION_RANGES[unitType]?.base || 0; // Use optional chaining and default to 0
 
 
-            playerUnits.forEach(unit => {
-                // Add unit existence check
-                if (!unit) return;
+            // Apply terrain bonus for Infantry and Artillery (and Artillery combat range?)
+            if (unitType === UnitType.INFANTERY || unitType === UnitType.ARTILLERY) { // Uses constants
+                // Assuming VISION_RANGES structure has hill_mountain for these types
+                if (terrainAtUnitHex === Terrain.HILL || terrainAtUnitHex === Terrain.MOUNTAIN) { // Uses constants
+                    // Check if hill_mountain range is defined, otherwise use base
+                    visionRange = VISION_RANGES[unitType]?.hill_mountain !== undefined ? VISION_RANGES[unitType].hill_mountain : visionRange;
+                }
+                // Note: Artillery combat range bonus might be different from vision range bonus.
+                // Check constants.js and adjust if necessary. Assuming vision and combat ranges are related.
+            }
+            // Note: Cavalry, Supply, Spy use base range only as per constants.js definition
 
-                const unitR = unit.row;
-                const unitC = unit.col;
-                const unitType = unit.type;
 
-                if (!isValid(unitR, unitC, currentMapRows, currentMapCols)) { // Uses utils function, global dims
-                    originalConsoleWarn(`[updateVisibility] Skipping visibility for invalid unit position at (${unitR}, ${unitC}) for unit ID ${unit.id}.`); // *** IMPROVED LOGGING ***
-                    return;
+            // originalConsoleLog(`[updateVisibility] Unit type ${getUnitTypeName(unitType)} ID ${unit.id} at (${unitR}, ${unitC}) on terrain ${terrainAtUnitHex} has vision range: ${visionRange}.`); // Too chatty
+
+
+            // Use BFS to mark all hexes within the calculated vision range as visible
+            const queue = [{ r: unitR, c: unitC, dist: 0 }];
+            const visited = new Set(`${unitR},${unitC}`); // Initialize visited with the starting hex - *** BUG FIX: Used unitR, unitC instead of potentially uninitialized r, c ***
+
+            while (queue.length > 0) {
+                const { r, c, dist } = queue.shift();
+
+                // Mark the current hex as visible
+                if (isValid(r, c, currentMapRows, currentMapCols)) { // Check validity again
+                    visibleHexes[r][c] = true; // Sets global visibleHexes
+                } else {
+                    continue; // Skip invalid hexes
                 }
 
-                const terrainAtUnitHex = map[unitR][unitC]; // Uses global map
-
-                let visionRange = VISION_RANGES[unitType]?.base || 0; // Use optional chaining and default to 0
-
-
-                // Apply terrain bonus for Infantry and Artillery (and Artillery combat range?)
-                if (unitType === UnitType.INFANTERY || unitType === UnitType.ARTILLERY) { // Uses constants
-                    // Assuming VISION_RANGES structure has hill_mountain for these types
-                    if (terrainAtUnitHex === Terrain.HILL || terrainAtUnitHex === Terrain.MOUNTAIN) { // Uses constants
-                        // Check if hill_mountain range is defined, otherwise use base
-                        visionRange = VISION_RANGES[unitType]?.hill_mountain !== undefined ? VISION_RANGES[unitType].hill_mountain : visionRange;
-                    }
-                    // Note: Artillery combat range bonus might be different from vision range bonus.
-                    // Check constants.js and adjust if necessary. Assuming vision and combat ranges are related.
-                }
-                // Note: Cavalry, Supply, Spy use base range only as per constants.js definition
-
-
-                // originalConsoleLog(`[updateVisibility] Unit type ${getUnitTypeName(unitType)} ID ${unit.id} at (${unitR}, ${unitC}) on terrain ${terrainAtUnitHex} has vision range: ${visionRange}.`); // Too chatty
-
-
-                // Use BFS to mark all hexes within the calculated vision range as visible
-                const queue = [{ r: unitR, c: unitC, dist: 0 }];
-                const visited = new Set(`${unitR},${unitC}`); // Initialize visited with the starting hex - *** BUG FIX: Used unitR, unitC instead of potentially uninitialized r, c ***
-
-                while (queue.length > 0) {
-                    const { r, c, dist } = queue.shift();
-
-                    // Mark the current hex as visible
-                    if (isValid(r, c, currentMapRows, currentMapCols)) { // Check validity again
-                        visibleHexes[r][c] = true; // Sets global visibleHexes
-                    } else {
-                        continue; // Skip invalid hexes
-                    }
-
-                    // If we are within vision range, explore neighbors
-                    if (dist < visionRange) {
-                        const neighbors = getNeighbors(r, c, currentMapRows, currentMapCols);
-                        for (const [nr, nc] of neighbors) {
-                            const neighborKey = `${nr},${nc}`;
-                            if (!visited.has(neighborKey) && isValid(nr, nc, currentMapRows, currentMapCols)) {
-                                visited.add(neighborKey);
-                                queue.push({ r: nr, c: nc, dist: dist + 1 });
-                            }
+                // If we are within vision range, explore neighbors
+                if (dist < visionRange) {
+                    const neighbors = getNeighbors(r, c, currentMapRows, currentMapCols);
+                    for (const [nr, nc] of neighbors) {
+                        const neighborKey = `${nr},${nc}`;
+                        if (!visited.has(neighborKey) && isValid(nr, nc, currentMapRows, currentMapCols)) {
+                            visited.add(neighborKey);
+                            queue.push({ r: nr, c: nc, dist: dist + 1 });
                         }
                     }
                 }
-            });
-        } // End of else block for map/units check
+            }
+        });
+    } // End of else block for map/units check
 
 
-        // --- Ensure hexes with player units are visible (Added Fix) ---
-        // This loop runs AFTER the BFS calculation and ensures that any hex
-        // currently occupied by a living unit of the local player's army is marked visible.
-        // This fixes the issue where a unit's own hex might not be visible.
-        // This check should happen regardless of whether the main BFS loop ran (e.g., if no units have vision > 0).
-        // originalConsoleLog(`[updateVisibility] Ensuring hexes of living player units (${playerArmyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} Army) are visible.`); // *** IMPROVED LOGGING TOO CHATTY***
-        let ownUnitHexesVisibleCount = 0; // *** ADDED LOGGING ***
-        if (playerArmyColor !== null && currentUnits) { // Only applies if player color is assigned and units exist
-            currentUnits.forEach(unit => {
-                if (unit && unit.armyColor === playerArmyColor && unit.health > 0) {
-                    if (isValid(unit.row, unit.col, currentMapRows, currentMapCols)) {
-                        visibleHexes[unit.row][unit.col] = true;
-                        ownUnitHexesVisibleCount++; // *** ADDED LOGGING ***
-                        // originalConsoleLog(`[updateVisibility] Ensuring hex (${unit.row}, ${unit.col}) of unit ID ${unit.id} is visible.`); // Optional detailed log
-                    } else {
-                        originalConsoleWarn(`[updateVisibility] Unit ID ${unit.id} at invalid position (${unit.row}, ${unit.col}) while ensuring visibility.`); // Log invalid unit position
-                    }
+    // --- Ensure hexes with player units are visible (Added Fix) ---
+    // This loop runs AFTER the BFS calculation and ensures that any hex
+    // currently occupied by a living unit of the local player's army is marked visible.
+    // This fixes the issue where a unit's own hex might not be visible.
+    // This check should happen regardless of whether the main BFS loop ran (e.g., if no units have vision > 0).
+    // originalConsoleLog(`[updateVisibility] Ensuring hexes of living player units (${playerArmyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} Army) are visible.`); // *** IMPROVED LOGGING TOO CHATTY***
+    let ownUnitHexesVisibleCount = 0; // *** ADDED LOGGING ***
+    if (currentUnits) { // Only applies if player color is assigned and units exist
+        currentUnits.forEach(unit => {
+            if (unit && unit.armyColor === playerArmyColor && unit.health > 0) {
+                if (isValid(unit.row, unit.col, currentMapRows, currentMapCols)) {
+                    visibleHexes[unit.row][unit.col] = true;
+                    ownUnitHexesVisibleCount++; // *** ADDED LOGGING ***
+                    // originalConsoleLog(`[updateVisibility] Ensuring hex (${unit.row}, ${unit.col}) of unit ID ${unit.id} is visible.`); // Optional detailed log
+                } else {
+                    originalConsoleWarn(`[updateVisibility] Unit ID ${unit.id} at invalid position (${unit.row}, ${unit.col}) while ensuring visibility.`); // Log invalid unit position
                 }
-            });
-        }
-        // originalConsoleLog(`[updateVisibility] Ensured ${ownUnitHexesVisibleCount} player unit hexes are visible.`); // *** ADDED LOGGING TOO CHATTY***
-        // --- End ensure hexes with player units are visible ---
-
-    } // End of else block for playerArmyColor being set
+            }
+        });
+    }
+    // originalConsoleLog(`[updateVisibility] Ensured ${ownUnitHexesVisibleCount} player unit hexes are visible.`); // *** ADDED LOGGING TOO CHATTY***
+    // --- End ensure hexes with player units are visible ---
 
     // *** ADDED LOGGING: Count total visible hexes ***
     // let totalVisibleCount = 0;
@@ -2073,12 +2033,12 @@ function gameLoop(currentTime) {
     // Ensure game state is sufficiently loaded before processing game logic.
     // If map or units are missing, just skip the game logic for this tick but keep drawing (or drawing blank).
     // Check if playerArmyColor is set AND (map and currentUnits are not null/empty) OR playerArmyColor is null (single player)
-    if (playerArmyColor !== null && (!map || !currentUnits || currentUnits.length === 0 || currentMapRows === 0 || currentMapCols === 0)) { // Added dimension check
+    if (!map || !currentUnits || currentUnits.length === 0 || currentMapRows === 0 || currentMapCols === 0) { // Added dimension check
         // In multiplayer and state is not ready (e.g., Red waiting for sync)
         drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors); // Draw placeholder or partial state
         gameLoopInterval = requestAnimationFrame(gameLoop);
         return; // Skip game logic
-    } else if (playerArmyColor === null && (!map || !currentUnits || currentUnits.length === 0 || currentMapRows === 0 || currentMapCols === 0)) { // Added dimension check
+    } else if (!map || !currentUnits || currentUnits.length === 0 || currentMapRows === 0 || currentMapCols === 0) { // Added dimension check
         // In single player and state is not ready (e.g., before first regeneration)
         drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors); // Draw placeholder or partial state
         gameLoopInterval = requestAnimationFrame(gameLoop);
@@ -2867,17 +2827,16 @@ function handleCanvasClick(event) {
         // No units are currently selected.
         // Simple Click or Shift+Click on a friendly unit selects it.
         // Clicking elsewhere does nothing.
-        const canSelect = isValidClickLocation && unitAtClickedHex &&
-            (playerArmyColor === null || (unitAtClickedHex.armyColor === playerArmyColor && isVisible));
+        const canSelect = isValidClickLocation && unitAtClickedHex && unitAtClickedHex.armyColor === playerArmyColor && isVisible;
 
         if (canSelect) {
             selectedUnit = unitAtClickedHex;
             selectedUnits.push(unitAtClickedHex); // Select the clicked unit
             console.log(`${getUnitTypeName(unitAtClickedHex.type)} of the ${unitAtClickedHex.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army at (${unitAtClickedHex.row}, ${unitAtClickedHex.col}) selected (health:${unitAtClickedHex.health}).`);
             originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Selected unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}).`);
-        } else if (isValidClickLocation && unitAtClickedHex && !isVisible && playerArmyColor !== null) {
+        } else if (isValidClickLocation && unitAtClickedHex && !isVisible) {
             originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Clicked on unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}), but hex is not visible. Cannot select/interact.`);
-        } else if (isValidClickLocation && unitAtClickedHex && unitAtClickedHex.armyColor !== playerArmyColor && playerArmyColor !== null) {
+        } else if (isValidClickLocation && unitAtClickedHex && unitAtClickedHex.armyColor !== playerArmyColor) {
             originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Clicked on enemy unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}). Cannot select.`);
         } else if (isValidClickLocation) {
             originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Clicked on empty hex (${clickedR}, ${clickedC}). No unit selected.`);
@@ -2890,8 +2849,7 @@ function handleCanvasClick(event) {
         if (shiftKey) {
             // Shift + Click when units are selected.
             // Toggle selection of a friendly unit. Ignore clicks elsewhere.
-            const canToggleSelect = isValidClickLocation && unitAtClickedHex &&
-                (playerArmyColor === null || (unitAtClickedHex.armyColor === playerArmyColor && isVisible));
+            const canToggleSelect = isValidClickLocation && unitAtClickedHex && unitAtClickedHex.armyColor === playerArmyColor && isVisible;
 
             if (canToggleSelect) {
                 const index = selectedUnits.findIndex(unit => unit.id === unitAtClickedHex.id);
@@ -2908,9 +2866,9 @@ function handleCanvasClick(event) {
                     console.log(`${getUnitTypeName(unitAtClickedHex.type)} of the ${unitAtClickedHex.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army at (${unitAtClickedHex.row}, ${unitAtClickedHex.col}) added to selection.`);
                     originalConsoleLog(`[handleCanvasClick] Shift+Click: Added unit ID ${unitAtClickedHex.id} to selection.`);
                 }
-            } else if (isValidClickLocation && unitAtClickedHex && !isVisible && playerArmyColor !== null) {
+            } else if (isValidClickLocation && unitAtClickedHex && !isVisible) {
                 originalConsoleLog(`[handleCanvasClick] Shift+Click: Clicked on unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}), but hex is not visible. Cannot toggle selection.`);
-            } else if (isValidClickLocation && unitAtClickedHex && unitAtClickedHex.armyColor !== playerArmyColor && playerArmyColor !== null) {
+            } else if (isValidClickLocation && unitAtClickedHex && unitAtClickedHex.armyColor !== playerArmyColor) {
                 originalConsoleLog(`[handleCanvasClick] Shift+Click: Clicked on enemy unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}). Cannot toggle selection.`);
             } else if (isValidClickLocation) {
                 originalConsoleLog(`[handleCanvasClick] Shift+Click: Clicked on empty hex (${clickedR}, ${clickedC}). Selection unchanged.`);
@@ -2940,7 +2898,7 @@ function handleCanvasClick(event) {
                         clickedSelectedUnit.movementProgress = 0; // Also reset movement progress when stopping
 
                         // *** Send a move order to the current location to stop movement (only in multiplayer) ***
-                        if (playerArmyColor !== null && ws && ws.readyState === WebSocket.OPEN) {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
                             const moveOrder = {
                                 type: 'MOVE_ORDER',
                                 unitId: clickedSelectedUnit.id,
@@ -2949,14 +2907,12 @@ function handleCanvasClick(event) {
                             };
                             ws.send(JSON.stringify(moveOrder));
                             originalConsoleLog(`[handleCanvasClick] Click: Sent MOVE_ORDER to stop unit ID ${clickedSelectedUnit.id} at (${clickedSelectedUnit.row}, ${clickedSelectedUnit.col}).`);
-                        } else if (playerArmyColor === null) {
-                            originalConsoleLog(`[handleCanvasClick] Single player: Stopping unit ID ${clickedSelectedUnit.id} locally.`);
                         }
                         console.log(`${getUnitTypeName(clickedSelectedUnit.type)} of the ${clickedSelectedUnit.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army deselected.`);
                         originalConsoleLog(`[handleCanvasClick] Click: Deselected unit ID ${clickedSelectedUnit.id} by clicking on it.`);
                     }
 
-                } else if (unitAtClickedHex && (playerArmyColor === null || (unitAtClickedHex.armyColor === playerArmyColor && isVisible))) {
+                } else if (unitAtClickedHex && unitAtClickedHex.armyColor === playerArmyColor && isVisible) {
                     // Clicked on an unselected friendly unit (on a visible hex).
                     // Clear current selection and select this new unit.
                     originalConsoleLog(`[handleCanvasClick] Click: Clicked on new friendly unit ID ${unitAtClickedHex.id}. Clearing selection and selecting new unit.`);
@@ -2972,7 +2928,7 @@ function handleCanvasClick(event) {
                     // This action is only valid if the selected units belong to the local player's army (in multiplayer).
                     const areSelectedUnitsFriendly = selectedUnits.every(unit => unit.armyColor === playerArmyColor);
 
-                    if (playerArmyColor === null || areSelectedUnitsFriendly) { // Check if it's the local player's units or single player
+                    if (areSelectedUnitsFriendly) { // Check if it's the local player's units or single player
 
                         const baseTargetR = clickedR;
                         const baseTargetC = clickedC;
@@ -2981,11 +2937,18 @@ function handleCanvasClick(event) {
                         // Create a copy of the selectedUnits array to iterate, as we might modify the original
                         const unitsToOrder = [...selectedUnits];
                         const unitsSuccessfullyOrdered = [];
-
-                        unitsToOrder.forEach((unit, index) => {
+                        let indexRow = 0;
+                        let indexCol = 0; 
+                        unitsToOrder.forEach((unit) => {
                             // Calculate the individual target hex with simple column displacement
-                            const targetR = baseTargetR;
-                            const targetC = baseTargetC + index;
+                            const targetR = baseTargetR + indexRow;
+                            const targetC = baseTargetC + indexCol;
+                            if (indexCol == 2) {
+                                indexCol = 0;
+                                indexRow++;
+                            }
+                            else
+                                indexCol++;
 
                             // Check validity of the individual target hex
                             const isTargetValidLocation = isValid(targetR, targetC, currentMapRows, currentMapCols);
@@ -3012,7 +2975,7 @@ function handleCanvasClick(event) {
                                 unitsSuccessfullyOrdered.push(unit); // Add to list of units that got an order
 
                                 // *** Send a MOVE_ORDER message to the server (only in multiplayer) ***
-                                if (playerArmyColor !== null && ws && ws.readyState === WebSocket.OPEN) {
+                                if (ws && ws.readyState === WebSocket.OPEN) {
                                     const moveOrder = {
                                         type: 'MOVE_ORDER',
                                         unitId: unit.id,
@@ -3021,8 +2984,6 @@ function handleCanvasClick(event) {
                                     };
                                     ws.send(JSON.stringify(moveOrder));
                                     originalConsoleLog(`[handleCanvasClick] Sent MOVE_ORDER for unit ID ${unit.id} to (${targetR}, ${targetC}).`);
-                                } else if (playerArmyColor === null) {
-                                    originalConsoleLog(`[handleCanvasClick] Single player: Set target for unit ID ${unit.id} to (${targetR}, ${targetC}) locally.`);
                                 }
                             }
                         });
@@ -3047,7 +3008,6 @@ function handleCanvasClick(event) {
                     }
                 }
 
-
             } else {
                 // Clicked outside the valid map area while units are selected -> Deselect all and stop movement
                 console.log(`${selectedUnits.length} unit(s) deselected (click outside map).`);
@@ -3064,7 +3024,7 @@ function handleCanvasClick(event) {
 
 
                 // *** Send move orders to the current location to stop movement for all selected units (only in multiplayer) ***
-                if (playerArmyColor !== null && ws && ws.readyState === WebSocket.OPEN) {
+                if (ws && ws.readyState === WebSocket.OPEN) {
                     selectedUnits.forEach(unit => {
                         if (unit) { // Ensure unit exists
                             const moveOrder = {
@@ -3077,8 +3037,6 @@ function handleCanvasClick(event) {
                             originalConsoleLog(`[handleCanvasClick] Sent MOVE_ORDER to stop unit ID ${unit.id} at (${unit.row}, ${unit.col}) (click outside map).`);
                         }
                     });
-                } else if (playerArmyColor === null) {
-                    originalConsoleLog(`[handleCanvasClick] Single player: Stopping selected units locally (click outside map).`);
                 }
 
                 // *** IMPORTANT: Deselect after processing the stop order ***
@@ -3092,9 +3050,7 @@ function handleCanvasClick(event) {
     // This is typically handled by the main game loop after processing all updates,
     // but calling it here provides more immediate feedback on selection changes.
     // If updateVisibility is expensive, it might be better to rely on the game loop.
-    if (playerArmyColor !== null) { // Only relevant in multiplayer with fog
-        updateVisibility(); // Needs access to currentUnits and playerArmyColor
-    }
+    updateVisibility(); // Needs access to currentUnits and playerArmyColor
 
     // Note: The gameLoop should be responsible for drawing the highlight for all units in the selectedUnits array.
 }
@@ -3842,7 +3798,7 @@ function sendChatMessage() {
         console.log(`${senderColor}: ${message}`);
 
         // *** For multiplayer, send this message via WebSocket: ***
-        if (ws && ws.readyState === WebSocket.OPEN && playerArmyColor !== null) { // Only send if connected and player color is assigned
+        if (ws && ws.readyState === WebSocket.OPEN) { // Only send if connected and player color is assigned
             const chatMessage = {
                 type: 'CHAT_MESSAGE',
                 text: message,
@@ -3850,10 +3806,6 @@ function sendChatMessage() {
             };
             ws.send(JSON.stringify(chatMessage));
             originalConsoleLog(`[sendChatMessage] Sent CHAT_MESSAGE to server: "${message}"`);
-        } else if (playerArmyColor === null) {
-             // This case is for single-player or before connection/assignment.
-             // The message is already displayed locally via the console.log above.
-             originalConsoleLog(`[sendChatMessage] Message "${message}" displayed locally (single-player or no connection).`);
         } else {
             // This case is for multiplayer but WS is not open (e.g., disconnected)
             console.warn("Cannot send message: server connection not established.");
