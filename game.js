@@ -3,6 +3,9 @@
  * Contains the main game loop, rendering, user interactions, and initialization.
  * Depends on all other files (.constants.js, .utils.js, .mapGeneration.js, .unitManagement.js).
  * Manages console redirection and main global variables.
+ *
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
  */
 
 // ============================================================================

@@ -4,6 +4,9 @@
  * Dépend de constants.js, utils.js.
  * Accède aux variables globales map, currentMapRows, currentMapCols, ARMY_COLOR_BLUE, ARMY_COLOR_RED, UnitType, UNIT_HEALTH.
  * Accède aux fonctions originales de la console (définies dans game.js).
+ *
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
  */
 
 // Counter for unique unit IDs

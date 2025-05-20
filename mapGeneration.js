@@ -2,6 +2,9 @@
  * mapGeneration.js
  * Contient la logique de génération de la carte hexagonale.
  * Dépend de constants.js et utils.js.
+ *
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
  */
 
 /**

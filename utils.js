@@ -4,6 +4,9 @@
  * Dépend de constants.js.
  * Accède aux variables globales currentMapRows, currentMapCols (définies dans game.js).
  * Accède aux fonctions originales de la console (définies dans game.js).
+ *
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
  */
 
 // *** NEW: Mapping of UnitType enum values to human-readable names ***

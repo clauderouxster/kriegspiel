@@ -1,3 +1,11 @@
+/*
+ * utils.js
+ * Contient des fonctions utilitaires générales pour le serveur
+ 
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
+ */
+
 const WebSocket = require('ws');
 const http = require('http');
 
