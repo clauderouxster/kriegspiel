@@ -1,4 +1,5 @@
 # kriegspiel
+![Battle](https://github.com/clauderouxster/kriegspiel/blob/main/images/battle.png)
 A war game in JavaScript that can be launched through node.js
 
 Objective: Kill the General of your opponent
