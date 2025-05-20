@@ -2334,7 +2334,7 @@ function gameLoop(currentTime) {
                     let firstDefender = null;
                     //First, we look for all enemy units within firing range
                     let defenderParticipatingUnits = new Set();
-                    const hexvoisins = getNeighbors(unitBlue.row, unitBlue.col, currentMapRows, currentMapCols);
+                    const hexvoisins = getHexesInRange(unitBlue.row, unitBlue.col, MAX_RANGE); // Check current hex and neighbors for range 1 // Uses game function
                     voisins = new Set();
                     voisins.add(unitBlue);
                     hexvoisins.forEach(pos => {
