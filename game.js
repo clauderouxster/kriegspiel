@@ -39,6 +39,7 @@ let gameTimeInMinutes = 6 * 60; // Start at 06:00 (6 hours * 60 minutes)
 let lastRealTime = performance.now(); // To track real time for game time progression
 let gameLoopInterval = null; // To hold the interval ID for the game loop
 
+let movedHexUnit = new Map();
 let selectedUnits = [];
 
 // Combat Time Tracking
@@ -2071,6 +2072,7 @@ function gameLoop(currentTime) {
                 unit.previousRow = unit.row;
                 unit.previousCol = unit.col;
                 // Also reset movement progress if it arrived
+                movedHexUnit.delete(unit);
                 unit.movementProgress = 0;
             }
             return;
@@ -2094,6 +2096,7 @@ function gameLoop(currentTime) {
             if (currentR === targetR && currentC === targetC) {
                 // Unit has arrived, clear target and progress
                 // originalConsoleLog(`[gameLoop] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} arrived at target (${unit.row}, ${unit.col}). Clearing target.`); // Chatty
+                movedHexUnit.delete(unit);
                 unit.targetRow = null;
                 unit.targetCol = null;
                 unit.movementProgress = 0; // Reset progress for the new move
@@ -2104,6 +2107,7 @@ function gameLoop(currentTime) {
 
 
             const neighbors = getNeighbors(currentR, currentC, currentMapRows, currentMapCols);
+            //const neighbors = getHexesInRange(currentR, currentC, 3);
             let bestNextHex = null;
             let minCombinedMetric = Infinity; // Use a high initial value
             let viableNeighbors = [];
@@ -2137,6 +2141,7 @@ function gameLoop(currentTime) {
             if (viableNeighbors.length === 0) {
                 console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}).`);
                 originalConsoleLog(`[gameLoop] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). No viable neighbors.`);
+                movedHexUnit.delete(unit);
                 unit.targetRow = null; // Clear target as it's unreachable from here
                 unit.targetCol = null;
                 unit.movementProgress = 0; // Reset progress
@@ -2201,12 +2206,13 @@ function gameLoop(currentTime) {
 
                     unitMovedThisStep = true; // This unit completed a step this tick
                     movedThisTick = true; // At least one unit moved a step this tick
-
-
+                    
+                    
                     // Check if the unit arrived at the target AFTER taking this step
                     if (unit.row === targetR && unit.col === targetC) {
                         console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army has arrived at destination (${unit.row}, ${unit.col}).`);
                         originalConsoleLog(`[gameLoop] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} arrived at final destination (${unit.row}, ${unit.col}) after step.`);
+                        movedHexUnit.delete(unit);
                         unit.targetRow = null; // Clear target
                         unit.targetCol = null;
                         unit.movementProgress = 0; // Reset remaining progress
@@ -2214,6 +2220,30 @@ function gameLoop(currentTime) {
                         unit.previousCol = unit.col;
                         // Visibility will be updated after the loop if any unit moved
                         break; // Exit the while loop for this unit (reached target)
+                    }
+
+                    if (!movedHexUnit.has(unit))
+                        movedHexUnit.set(unit,[[nextR, nextC]]);
+                    else {
+                        let found = false;
+                        const unitlist = movedHexUnit.get(unit);
+                        unitlist.forEach(pos => {
+                            if (pos[0] == nextR && pos[1] == nextC) {
+                                found = true;
+                            }
+                       });
+                       if (!found) {
+                            movedHexUnit.get(unit).push([nextR, nextC]);
+                       }
+                       else {
+                            movedHexUnit.delete(unit);
+                            unit.targetRow = null; // Clear target
+                            unit.targetCol = null;
+                            unit.movementProgress = 0; // Reset remaining progress
+                            unit.previousRow = unit.row; // Reset previous on arrival
+                            unit.previousCol = unit.col;
+                            break;
+                       }
                     }
 
                     // If the unit has remaining movementProgress, the while loop continues
@@ -2228,6 +2258,7 @@ function gameLoop(currentTime) {
                 // Fallback block if no best next hex was found from viable options (shouldn't happen if viableNeighbors is not empty)
                 console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}) - fallback block.`);
                 originalConsoleLog(`[gameLoop] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). Fallback block.`);
+                movedHexUnit.delete(unit);
                 unit.targetRow = null;
                 unit.targetCol = null;
                 unit.movementProgress = 0;
@@ -2943,7 +2974,7 @@ function handleCanvasClick(event) {
                             // Calculate the individual target hex with simple column displacement
                             const targetR = baseTargetR + indexRow;
                             const targetC = baseTargetC + indexCol;
-                            if (indexCol == 2) {
+                            if (indexCol == 3) {
                                 indexCol = 0;
                                 indexRow++;
                             }
