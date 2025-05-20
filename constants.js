@@ -1,6 +1,9 @@
 /*
  * constants.js
  * Contient toutes les constantes utilisées dans le jeu Kriegspiel Map.
+ *
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
  */
 
 // Constants for terrain types
@@ -141,12 +144,12 @@ const TERRAIN_MOVEMENT_COSTS = {
 // Base movement capability per game hour (number of "movement cost units" covered per game hour)
 // Higher values mean faster movement
 const UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR = {
-    [UnitType.INFANTERY]: 10, // 10 cost units per game hour
-    [UnitType.ARTILLERY]: 8,
-    [UnitType.CAVALRY]: 15,
-    [UnitType.SUPPLY]: 7,
-    [UnitType.SPY]: 20, // Spy is fastest
-    [UnitType.GENERAL]: 9 // Nouveau : Général - Vitesse base (pour atteindre environ 10 de vitesse)
+    [UnitType.INFANTERY]: 4, // 10 cost units per game hour
+    [UnitType.ARTILLERY]: 3,
+    [UnitType.CAVALRY]: 8,
+    [UnitType.SUPPLY]: 2,
+    [UnitType.SPY]: 8, // Spy is fastest
+    [UnitType.GENERAL]: 5 // Nouveau : Général - Vitesse base (pour atteindre environ 10 de vitesse)
 };
 
 /**
