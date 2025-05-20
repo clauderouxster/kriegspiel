@@ -41,16 +41,16 @@ const UnitType = {
     GENERAL: 5      // Général
 };
 
-SOUND_TRUMPET_PATH = 'images/trumpet.mp3';
+SOUND_TRUMPET_PATH = 'resources/trumpet.mp3';
 
 // File paths for unit images
 const UNIT_IMAGE_PATHS = {
-    [UnitType.INFANTERY]: 'images/infanterie.png',
-    [UnitType.ARTILLERY]: 'images/artillerie.png',
-    [UnitType.CAVALRY]: 'images/cavalerie.png',
-    [UnitType.SUPPLY]: 'images/intendance.png',
-    [UnitType.SPY]: 'images/espion.png',
-    [UnitType.GENERAL]: 'images/general.png' // Nouveau : Fichier pour le général
+    [UnitType.INFANTERY]: 'resources/infanterie.png',
+    [UnitType.ARTILLERY]: 'resources/artillerie.png',
+    [UnitType.CAVALRY]: 'resources/cavalerie.png',
+    [UnitType.SUPPLY]: 'resources/intendance.png',
+    [UnitType.SPY]: 'resources/espion.png',
+    [UnitType.GENERAL]: 'resources/general.png' // Nouveau : Fichier pour le général
 };
 
 // Colors for armies (for visual distinction)
