@@ -2558,19 +2558,23 @@ function loadGameStateFromJson(state) {
  * Accesses global canvas, map, currentUnits, selectedUnits, currentMapRows, currentMapCols, playerArmyColor, ws, visibleHexes.
  * Uses originalConsoleLog, originalConsoleWarn.
  */
+
+// Add this function to handle keyboard input
+function handleKeyDown(event) {
+    if (event.key === "Escape") {
+        if (selectedUnits.length > 0) {
+            selectedUnits = []; // Clear the array of selected units
+            selectedUnit = null;
+            // You might want to redraw here to immediately show units as deselected
+            drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors);
+        }
+    }
+    // Add other key handling logic here if needed
+}
+
 // NOUVELLE FONCTION POUR SÉLECTIONNER DES UNITÉS DANS UNE ZONE
 function selectUnitsInArea(rectX, rectY, rectEndX, rectEndY) {
     const selectedUnitsInArea = [];
-
-    rectX = Math.min(0, rectX);
-    rectY = Math.min(0, rectY);
-    rectEndX = Math.min(0, rectEndX)
-    rectEndY = Math.min(0, rectEndY)
-
-    rectX = Math.max(rectX, currentMapRows);
-    rectY = Math.max(rectY, currentMapRows);
-    rectEndX = Math.max(rectEndX, currentMapCols)
-    rectEndY = Math.max(rectEndY, currentMapCols)
 
     // Calculer les bords du rectangle de sélection
     const rectLeft = Math.min(rectX, rectEndX);
@@ -2664,7 +2668,7 @@ function setupCanvasEventListeners() {
     //canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousedown', handleCanvasMouseDown);
     canvas.addEventListener('mousemove', handleCanvasMouseMove);
-    canvas.addEventListener('mouseup', handleCanvasMouseUp);
+    canvas.addEventListener('mouseup', handleCanvasMouseUp);    
 }
 
 function handleCanvasClick(event) {
@@ -3638,6 +3642,7 @@ window.addEventListener('DOMContentLoaded', () => {
         // *** END NEW ***
 
 
+        document.addEventListener('keydown', handleKeyDown);
         // Canvas click handler for selection and movement orders        
         setupCanvasEventListeners();
         originalConsoleLog("[DOMContentLoaded] Canvas click event listener attached.");
