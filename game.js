@@ -39,6 +39,7 @@ let dragStartX = 0;
 let dragStartY = 0;
 let dragCurrentX = 0;
 let dragCurrentY = 0;
+let unitMovementTimers = new Map(); // Map<unit.id, setTimeoutId>
 
 // Game Time Variables
 let gameTimeInMinutes = 6 * 60; // Start at 06:00 (6 hours * 60 minutes)
@@ -1761,6 +1762,195 @@ function getHexesInRange(centerR, centerC, range) {
 // ============================================================================
 
 /**
+ * Gère un seul pas de mouvement pour une unité donnée.
+ * Calcule le prochain hexagone, met à jour la position de l'unité,
+ * et redémarre un timer pour le pas suivant si nécessaire.
+ * @param {object} unit - L'unité à déplacer.
+ */
+function moveUnitStep(unit) {
+    // Si l'unité a été éliminée pendant que son timer était en cours
+    if (!unit || unit.health <= 0) {
+        //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} is no longer alive. Cancelling further movement.`);
+        unitMovementTimers.delete(unit.id);
+        return;
+    }
+
+    const currentR = unit.row;
+    const currentC = unit.col;
+    const targetR = unit.targetRow;
+    const targetC = unit.targetCol;
+
+    // Si l'unité est déjà à la cible ou n'a plus de cible valide, annuler le mouvement.
+    if (targetR === null || targetC === null || (currentR === targetR && currentC === targetC)) {
+        //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} arrived at target (${unit.row}, ${unit.col}) or target cleared. Stopping movement.`);
+        movedHexUnit.delete(unit); // Supprimer de la liste de détection de boucle
+        unit.targetRow = null;
+        unit.targetCol = null;
+        unit.movementProgress = 0; // Réinitialiser le progrès
+        unit.previousRow = unit.row;
+        unit.previousCol = unit.col;
+        if (unitMovementTimers.has(unit.id)) {
+            clearTimeout(unitMovementTimers.get(unit.id));
+            unitMovementTimers.delete(unit.id);
+        }
+        return; // Arrêter le traitement pour cette unité
+    }
+
+    const neighbors = getNeighbors(currentR, currentC, currentMapRows, currentMapCols);
+    let bestNextHex = null;
+    let minCombinedMetric = Infinity;
+    let viableNeighbors = [];
+
+    const validLivingCurrentUnits = currentUnits.filter(u => u !== null && u !== undefined && u.health > 0);
+
+    for (const neighbor of neighbors) {
+        const neighborR = neighbor[0];
+        const neighborC = neighbor[1];
+
+        if (!isValid(neighborR, neighborC, currentMapRows, currentMapCols)) continue;
+
+        const neighborTerrain = map[neighborR][neighborC];
+        const gameMinutesNeededForStep = calculateMoveDurationGameMinutes(unit.type, neighborTerrain);
+
+        if (gameMinutesNeededForStep === Infinity) continue;
+
+        const unitAtNeighbor = getUnitAt(neighborR, neighborC, validLivingCurrentUnits, "moveUnitStep - movement blocking check neighbor");
+        const isOccupied = (unitAtNeighbor !== null && unitAtNeighbor.id !== unit.id);
+
+        if (isOccupied) continue;
+
+        viableNeighbors.push({ r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep });
+    }
+
+    if (viableNeighbors.length === 0) {
+        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}).`);
+        originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). No viable neighbors.`);
+        movedHexUnit.delete(unit);
+        unit.targetRow = null;
+        unit.targetCol = null;
+        unit.movementProgress = 0;
+        unit.previousRow = unit.row;
+        unit.previousCol = unit.col;
+        if (unitMovementTimers.has(unit.id)) {
+            clearTimeout(unitMovementTimers.get(unit.id));
+            unitMovementTimers.delete(unit.id);
+        }
+        return; // Unité bloquée, arrêter le mouvement
+    }
+
+    let onlyPreviousHexIsViable = viableNeighbors.length === 1 && viableNeighbors[0].r === unit.previousRow && viableNeighbors[0].c === unit.previousCol;
+
+    for (const neighbor of viableNeighbors) {
+        const { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep } = neighbor;
+        const targetDistance = getHexDistance(neighborR, neighborC, targetR, targetC);
+
+        let previousHexPenalty = 0;
+        if (neighborR === unit.previousRow && neighborC === unit.previousCol && !onlyPreviousHexIsViable) {
+            previousHexPenalty = 60 * 5;
+        }
+
+        // Garder le facteur aléatoire pour la cohérence des tests locaux, mais
+        // noter le risque de désynchro sans un PRNG avec seed synchronisée pour le multijoueur.
+        const randomFactor = (Math.random() * 0.01) - 0.005;
+
+        const combinedMetric = targetDistance * 1000 + (gameMinutesNeededForStep + previousHexPenalty) + randomFactor;
+
+        if (bestNextHex === null || combinedMetric < minCombinedMetric) {
+            minCombinedMetric = combinedMetric;
+            bestNextHex = { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep };
+        }
+    }
+
+    if (bestNextHex) {
+        const { r: nextR, c: nextC, gameMinutesCost: gameMinutesNeededForStep } = bestNextHex;
+
+        const oldR = unit.row;
+        const oldC = unit.col;
+
+        unit.row = nextR;
+        unit.col = nextC;
+        unit.previousRow = oldR;
+        unit.previousCol = oldC;
+
+        // Mise à jour de movedHexUnit pour la détection de boucle
+        if (!movedHexUnit.has(unit)) {
+            const hexVisits = new Map();
+            hexVisits.set(`${nextR},${nextC}`, 1);
+            movedHexUnit.set(unit, hexVisits);
+        } else {
+            const unitHexVisits = movedHexUnit.get(unit);
+            const currentHexKey = `${nextR},${nextC}`;
+
+            if (unitHexVisits.has(currentHexKey)) {
+                let visitCount = unitHexVisits.get(currentHexKey);
+                visitCount++;
+                unitHexVisits.set(currentHexKey, visitCount);
+
+                if (visitCount >= 3) {
+                    originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} detected loop. Stopping movement.`);
+                    movedHexUnit.delete(unit);
+                    unit.targetRow = null;
+                    unit.targetCol = null;
+                    unit.movementProgress = 0;
+                    unit.previousRow = unit.row;
+                    unit.previousCol = unit.col;
+                    if (unitMovementTimers.has(unit.id)) {
+                        clearTimeout(unitMovementTimers.get(unit.id));
+                        unitMovementTimers.delete(unit.id);
+                    }
+                    return; // Arrêter le mouvement en cas de boucle
+                }
+            } else {
+                unitHexVisits.set(currentHexKey, 1);
+            }
+        }
+
+        // Mise à jour de la visibilité car l'unité a bougé
+        // Note: updateVisibility() devrait être appelé une seule fois par tick globalement,
+        // mais pour l'instant, nous le mettons ici pour réactivité si une unité individuelle bouge.
+        // Une meilleure approche serait de stocker un drapeau global 'movedThisTick' et de l'appeler à la fin de gameLoop.
+        updateVisibility();
+
+        // Si l'unité est arrivée à destination après ce pas
+        if (unit.row === targetR && unit.col === targetC) {
+            console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army has arrived at destination (${unit.row}, ${unit.col}).`);
+            originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} arrived at final destination (${unit.row}, ${unit.col}) after step.`);
+            movedHexUnit.delete(unit);
+            unit.targetRow = null;
+            unit.targetCol = null;
+            unit.movementProgress = 0;
+            unit.previousRow = unit.row;
+            unit.previousCol = unit.col;
+            if (unitMovementTimers.has(unit.id)) {
+                clearTimeout(unitMovementTimers.get(unit.id));
+                unitMovementTimers.delete(unit.id);
+            }
+            return; // L'unité est arrivée
+        }
+
+        // L'unité doit continuer à bouger : démarrer le timer pour le prochain pas
+        const realTimeForNextStep = gameMinutesNeededForStep * MILLISECONDS_PER_GAME_MINUTE;
+        const timerId = setTimeout(() => moveUnitStep(unit), realTimeForNextStep);
+        unitMovementTimers.set(unit.id, timerId);
+        //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} moved to (${unit.row}, ${unit.col}). Next step in ${realTimeForNextStep.toFixed(0)} ms.`);
+    } else {
+        // Fallback si aucun meilleur hexagone n'est trouvé (ne devrait pas arriver si viableNeighbors n'est pas vide)
+        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}) - fallback block.`);
+        originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). Fallback block.`);
+        movedHexUnit.delete(unit);
+        unit.targetRow = null;
+        unit.targetCol = null;
+        unit.movementProgress = 0;
+        unit.previousRow = unit.row;
+        unit.previousCol = unit.col;
+        if (unitMovementTimers.has(unit.id)) {
+            clearTimeout(unitMovementTimers.get(unit.id));
+            unitMovementTimers.delete(unit.id);
+        }
+    }
+}
+
+/**
  * The main game loop: updates time, manages unit movement, detects combat (Blue only), and redraws.
  * Movement is now processed incrementally within this loop based on accumulated game time.
  * Depends on MILLISECONDS_PER_GAME_MINUTE, UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR, ARMY_COLOR_BLUE, ARMY_COLOR_RED, Terrain, UnitType, UNIT_HEALTH from constants.js.
@@ -1813,228 +2003,25 @@ function gameLoop(currentTime) {
     const gameMinutesToAdd = (realTimeElapsed / MILLISECONDS_PER_GAME_MINUTE);
     gameTimeInMinutes += gameMinutesToAdd;
 
-    // --- Unit Movement Processing ---
-    // This runs on BOTH clients for all units based on their local target/progress
-    // Filter units to only include living ones for movement processing
-    const unitsToProcessMovement = currentUnits.filter(unit => unit !== null && unit !== undefined && unit.health > 0);
+    // --- Unit Movement Processing (Event-driven via Timers) ---
+    // Cette partie est responsable de DÉMARRER le mouvement des unités
+    // qui ont une cible et n'ont pas encore de timer actif.
+    // Le mouvement pas-par-pas est géré par la fonction moveUnitStep et ses timers.
+    const unitsEligibleForMovementStart = currentUnits.filter(unit =>
+        unit !== null && unit !== undefined && unit.health > 0 && // Unité vivante
+        unit.targetRow !== null && unit.targetCol !== null && // A une cible
+        !(unit.row === unit.targetRow && unit.col === unit.targetCol) && // N'est pas déjà à la cible
+        !unitMovementTimers.has(unit.id) // N'a pas de timer de mouvement déjà actif
+    );
 
     let movedThisTick = false; // Flag to track if any unit moved at least one hex
-
-    unitsToProcessMovement.forEach(unit => {
-        // Check if unit still has a target and is not already there
-        if (unit.targetRow === null || unit.targetCol === null || (unit.row === unit.targetRow && unit.col === unit.targetCol)) {
-            // This unit is not moving or just arrived
-            // Ensure previous position is up to date if it finished moving
-            if (unit.targetRow !== null && unit.targetCol !== null && unit.row === unit.targetRow && unit.col === unit.targetCol) {
-                unit.previousRow = unit.row;
-                unit.previousCol = unit.col;
-                // Also reset movement progress if it arrived
-                movedHexUnit.delete(unit);
-                unit.movementProgress = 0;
-            }
-            return;
-        }
-
-        // Accumulate movement time for this unit
-        unit.movementProgress += gameMinutesToAdd;
-
-        // --- Determine and Process Steps ---
-        let unitMovedThisStep = false; // Flag for this specific unit taking a full hex step
-
-        // Use a while loop to allow units to move multiple hexes per real-time tick
-        // if game time advances significantly.
-        while (unit.movementProgress > 0) {
-            const currentR = unit.row;
-            const currentC = unit.col;
-            const targetR = unit.targetRow;
-            const targetC = unit.targetCol;
-
-            // Check if the unit is already at the target before trying to step
-            if (currentR === targetR && currentC === targetC) {
-                // Unit has arrived, clear target and progress
-                // originalConsoleLog(`[gameLoop] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} arrived at target (${unit.row}, ${unit.col}). Clearing target.`); // Chatty
-                movedHexUnit.delete(unit);
-                unit.targetRow = null;
-                unit.targetCol = null;
-                unit.movementProgress = 0; // Reset progress for the new move
-                unit.previousRow = unit.row; // Reset previous on arrival
-                unit.previousCol = unit.col;
-                break; // Exit while loop for this unit
-            }
-
-
-            const neighbors = getNeighbors(currentR, currentC, currentMapRows, currentMapCols);
-            //const neighbors = getHexesInRange(currentR, currentC, 3);
-            let bestNextHex = null;
-            let minCombinedMetric = Infinity; // Use a high initial value
-            let viableNeighbors = [];
-
-            // Ensure currentUnits is filtered to only include living ones for occupation check
-            const validLivingCurrentUnits = currentUnits.filter(u => u !== null && u !== undefined && u.health > 0);
-
-            for (const neighbor of neighbors) {
-                const neighborR = neighbor[0];
-                const neighborC = neighbor[1];
-
-                if (!isValid(neighborR, neighborC, currentMapRows, currentMapCols)) continue;
-
-                const neighborTerrain = map[neighborR][neighborC];
-                const gameMinutesNeededForStep = calculateMoveDurationGameMinutes(unit.type, neighborTerrain); // Uses constants function
-
-                // Ignore impassable terrain or hexes that would take infinite time
-                if (gameMinutesNeededForStep === Infinity) continue;
-
-                // Check if the neighbor hex is occupied by another unit that is NOT the unit itself
-                const unitAtNeighbor = getUnitAt(neighborR, neighborC, validLivingCurrentUnits, "gameLoop - movement blocking check neighbor"); // Uses utils function, filtered list
-                const isOccupied = (unitAtNeighbor !== null && unitAtNeighbor.id !== unit.id); // Check by ID
-
-
-                if (isOccupied) continue; // Cannot move onto an occupied hex
-
-                viableNeighbors.push({ r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep }); // Store the time cost
-            }
-
-            // If no viable neighbors (impassable terrain around, or all occupied)
-            if (viableNeighbors.length === 0) {
-                console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}).`);
-                originalConsoleLog(`[gameLoop] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). No viable neighbors.`);
-                movedHexUnit.delete(unit);
-                unit.targetRow = null; // Clear target as it's unreachable from here
-                unit.targetCol = null;
-                unit.movementProgress = 0; // Reset progress
-                unit.previousRow = unit.row; // Reset previous on block
-                unit.previousCol = unit.col;
-                // Visibility is updated later if any unit moved, or on sync/combat result.
-                break; // Exit the while loop for this unit
-            }
-
-            // Evaluate viable neighbors to choose the best next step (simplistic pathing)
-            // Prefer moving towards the target, but also penalize moving back to the previous hex
-            let onlyPreviousHexIsViable = viableNeighbors.length === 1 && viableNeighbors[0].r === unit.previousRow && viableNeighbors[0].c === unit.previousCol;
-
-
-            for (const neighbor of viableNeighbors) {
-                const { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep } = neighbor;
-
-                // Calculate distance to the final target from this neighbor hex
-                const targetDistance = getHexDistance(neighborR, neighborC, targetR, targetC); // Uses utils function
-
-                let previousHexPenalty = 0;
-                // Apply a penalty if the neighbor is the immediately previous hex, unless it's the *only* option
-                if (neighborR === unit.previousRow && neighborC === unit.previousCol && !onlyPreviousHexIsViable) {
-                    previousHexPenalty = 60 * 5; // Large penalty: 5 game hours worth of movement time
-                }
-
-                // Small random factor to break ties consistently across clients (might need better tie-breaking if sync is critical)
-                // Using Math.random() directly here can cause de-sync if clients have different seeds/implementations.
-                // A better approach for synced movement would be to use a pseudo-random number generator with a synced seed,
-                // or make the pathing deterministic (e.g., prefer lower R, then lower C on ties).
-                // For now, keeping Math.random() but note the potential de-sync.
-                const randomFactor = (Math.random() * 0.01) - 0.005; // Small random value around 0
-
-                // Metric to evaluate neighbor: prioritize closer to target, then cheaper cost, then avoid going back
-                // Combine target distance (scaled) and time cost/penalty.
-                const combinedMetric = targetDistance * 1000 + (gameMinutesNeededForStep + previousHexPenalty) + randomFactor;
-
-
-                if (bestNextHex === null || combinedMetric < minCombinedMetric) {
-                    minCombinedMetric = combinedMetric;
-                    bestNextHex = { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep };
-                }
-            }
-
-            // If a best next hex was determined from viable options
-            if (bestNextHex) {
-                const { r: nextR, c: nextC, gameMinutesCost: gameMinutesNeededForStep } = bestNextHex;
-
-                // Check if the unit has accumulated enough movement progress to enter this next hex
-                if (unit.movementProgress >= gameMinutesNeededForStep) {
-                    // Unit has enough progress for the step! Move the unit.
-                    unit.movementProgress -= gameMinutesNeededForStep; // Spend the cost
-
-                    const oldR = unit.row;
-                    const oldC = unit.col;
-
-                    unit.row = nextR; // Update position
-                    unit.col = nextC;
-
-                    unit.previousRow = oldR; // Record previous position
-                    unit.previousCol = oldC;
-
-                    unitMovedThisStep = true; // This unit completed a step this tick
-                    movedThisTick = true; // At least one unit moved a step this tick
-                    
-                    
-                    // Check if the unit arrived at the target AFTER taking this step
-                    if (unit.row === targetR && unit.col === targetC) {
-                        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army has arrived at destination (${unit.row}, ${unit.col}).`);
-                        originalConsoleLog(`[gameLoop] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} arrived at final destination (${unit.row}, ${unit.col}) after step.`);
-                        movedHexUnit.delete(unit);
-                        unit.targetRow = null; // Clear target
-                        unit.targetCol = null;
-                        unit.movementProgress = 0; // Reset remaining progress
-                        unit.previousRow = unit.row; // Reset previous on arrival
-                        unit.previousCol = unit.col;
-                        // Visibility will be updated after the loop if any unit moved
-                        break; // Exit the while loop for this unit (reached target)
-                    }
-
-                    // A Map to store for each unit, a Map of hex positions and their visit counts
-                    //If the unit goes back to a previous position more than 3 times, we stop to avoid
-                    //the unit to wander around
-                    if (!movedHexUnit.has(unit)) {
-                        // First time seeing this unit, initialize its position map
-                        const hexVisits = new Map();
-                        hexVisits.set(`${nextR},${nextC}`, 1); // Store "r,c" string as key
-                        movedHexUnit.set(unit, hexVisits);
-                    } else {
-                        const unitHexVisits = movedHexUnit.get(unit);
-                        const currentHexKey = `${nextR},${nextC}`;
-
-                        if (unitHexVisits.has(currentHexKey)) {
-                            // Unit has been to this hex before
-                            let visitCount = unitHexVisits.get(currentHexKey);
-                            visitCount++;
-                            unitHexVisits.set(currentHexKey, visitCount);
-
-                            if (visitCount >= 3) { // Check if it's the 3rd or more visit
-                                movedHexUnit.delete(unit); // Clear all tracking for this unit
-                                unit.targetRow = null; // Clear target
-                                unit.targetCol = null;
-                                unit.movementProgress = 0; // Reset remaining progress
-                                unit.previousRow = unit.row; // Reset previous on arrival
-                                unit.previousCol = unit.col;
-                                break; // Stop the unit's movement
-                            }
-                        } else {
-                            // First time visiting this specific hex for this unit
-                            unitHexVisits.set(currentHexKey, 1);
-                        }
-                    }
-                    // If the unit has remaining movementProgress, the while loop continues
-                    // to potentially move another step in the same tick.
-
-                } else {
-                    // Unit does not have enough movement progress for the next step.
-                    // It waits here until enough time accumulates.
-                    break; // Exit the while loop for this unit
-                }
-            } else {
-                // Fallback block if no best next hex was found from viable options (shouldn't happen if viableNeighbors is not empty)
-                console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}) - fallback block.`);
-                originalConsoleLog(`[gameLoop] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). Fallback block.`);
-                movedHexUnit.delete(unit);
-                unit.targetRow = null;
-                unit.targetCol = null;
-                unit.movementProgress = 0;
-                unit.previousRow = unit.row; // Reset previous on block
-                unit.previousCol = unit.col;
-                // Visibility will be updated later if any unit moved, or on sync/combat result.
-                break; // Exit the while loop for this unit
-            }
-        }
-        // After the while loop for this unit, unitMovedThisStep indicates if it took *any* full step
-        // movedThisTick indicates if *any* unit took *any* step in this game loop tick.
+    unitsEligibleForMovementStart.forEach(unit => {
+        // Démarrer le premier pas pour cette unité.
+        // La fonction moveUnitStep s'occupera d'enchaîner les pas suivants.
+        // On l'appelle directement une première fois pour initier le processus.
+        originalConsoleLog(`[gameLoop] Initiating movement for Unit ID ${unit.id} towards (${unit.targetRow}, ${unit.targetCol}).`);
+        movedThisTick = true;
+        moveUnitStep(unit);
     });
 
     // Update visibility once per tick if any unit moved.
@@ -2575,6 +2562,16 @@ function handleKeyDown(event) {
 // NOUVELLE FONCTION POUR SÉLECTIONNER DES UNITÉS DANS UNE ZONE
 function selectUnitsInArea(rectX, rectY, rectEndX, rectEndY) {
     const selectedUnitsInArea = [];
+
+    rectX = Math.max(0, rectX);
+    rectY = Math.max(0, rectY);
+    rectEndX = Math.max(0, rectEndX);
+    rectEndY = Math.max(0, rectEndY);
+
+    rectX = Math.min(rectX, currentMapRows - 1);
+    rectY = Math.min(rectY, currentMapCols - 1);
+    rectEndX = Math.min(rectEndX, currentMapRows - 1);
+    rectEndY = Math.min(rectEndY, currentMapCols - 1);
 
     // Calculer les bords du rectangle de sélection
     const rectLeft = Math.min(rectX, rectEndX);
