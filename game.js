@@ -2385,25 +2385,13 @@ function gameLoop(currentTime) {
                 }
             }
 
-
-            if (supplyUnitFound) {
+            if (supplyUnitFound && unit.type !== UnitType.SUPPLY) {
                 // Healing amount scaled by game minutes elapsed
                 const healingRatePerGameMinute = maxHealth * 0.005; // Example: heal 0.5% of max HP per game minute
                 const healingAmount = healingRatePerGameMinute * gameMinutesToAdd; // Scale by actual elapsed game minutes
 
                 const oldHealth = unit.health;
                 unit.health = Math.min(maxHealth, unit.health + healingAmount);
-
-                // Optional: Log healing if health actually increased
-                if (unit.health > oldHealth) {
-                    // originalConsoleLog(`[gameLoop] Unit ID ${unit.id} (${getUnitTypeName(unit.type)}) healed ${healingAmount.toFixed(2)} HP (from ${oldHealth.toFixed(2)} to ${unit.health.toFixed(2)}) due to Supply.`); // Chatty
-                }
-
-                // Optional: Log when a unit reaches full health
-                // if (unit.health === maxHealth && oldHealth < maxHealth) {
-                //      console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army at (${unit.row}, ${unit.col}) has recovered all its HP thanks to Supply.`);
-                // }
-
             }
         });
     }
