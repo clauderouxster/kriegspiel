@@ -2562,6 +2562,16 @@ function loadGameStateFromJson(state) {
 function selectUnitsInArea(rectX, rectY, rectEndX, rectEndY) {
     const selectedUnitsInArea = [];
 
+    rectX = Math.min(0, rectX);
+    rectY = Math.min(0, rectY);
+    rectEndX = Math.min(0, rectEndX)
+    rectEndY = Math.min(0, rectEndY)
+
+    rectX = Math.max(rectX, currentMapRows);
+    rectY = Math.max(rectY, currentMapRows);
+    rectEndX = Math.max(rectEndX, currentMapCols)
+    rectEndY = Math.max(rectEndY, currentMapCols)
+
     // Calculer les bords du rectangle de sélection
     const rectLeft = Math.min(rectX, rectEndX);
     const rectRight = Math.max(rectX, rectEndX);
