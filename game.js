@@ -115,7 +115,10 @@ function connectToServer() {
 
     console.log(`Attempting WebSocket connection to ${serverAddress}...`);
     // Use ws:// for WebSocket, wss:// for Secure WebSocket
-    ws = new WebSocket(`wss://${serverAddress}`); // Assuming ws for local testing
+    if (serverAddress.includes('.ngrok')) 
+        ws = new WebSocket(`wss://${serverAddress}`); // Assuming ws for local testing
+    else
+        ws = new WebSocket(`ws://${serverAddress}`); // Assuming ws for local testing
 
     ws.onopen = () => {
         console.log('WebSocket connection established.');
@@ -1955,32 +1958,38 @@ function gameLoop(currentTime) {
                         break; // Exit the while loop for this unit (reached target)
                     }
 
-                    //If the unit goes back to a previous position, we stop to avoid
+                    // A Map to store for each unit, a Map of hex positions and their visit counts
+                    //If the unit goes back to a previous position more than 3 times, we stop to avoid
                     //the unit to wander around
-                    if (!movedHexUnit.has(unit))
-                        movedHexUnit.set(unit,[[nextR, nextC]]);
-                    else {
-                        let found = false;
-                        const unitlist = movedHexUnit.get(unit);
-                        unitlist.forEach(pos => {
-                            if (pos[0] == nextR && pos[1] == nextC) {
-                                found = true;
-                            }
-                       });
-                       if (!found) {
-                            movedHexUnit.get(unit).push([nextR, nextC]);
-                       }
-                       else {
-                            movedHexUnit.delete(unit);
-                            unit.targetRow = null; // Clear target
-                            unit.targetCol = null;
-                            unit.movementProgress = 0; // Reset remaining progress
-                            unit.previousRow = unit.row; // Reset previous on arrival
-                            unit.previousCol = unit.col;
-                            break;
-                       }
-                    }
+                    if (!movedHexUnit.has(unit)) {
+                        // First time seeing this unit, initialize its position map
+                        const hexVisits = new Map();
+                        hexVisits.set(`${nextR},${nextC}`, 1); // Store "r,c" string as key
+                        movedHexUnit.set(unit, hexVisits);
+                    } else {
+                        const unitHexVisits = movedHexUnit.get(unit);
+                        const currentHexKey = `${nextR},${nextC}`;
 
+                        if (unitHexVisits.has(currentHexKey)) {
+                            // Unit has been to this hex before
+                            let visitCount = unitHexVisits.get(currentHexKey);
+                            visitCount++;
+                            unitHexVisits.set(currentHexKey, visitCount);
+
+                            if (visitCount >= 3) { // Check if it's the 3rd or more visit
+                                movedHexUnit.delete(unit); // Clear all tracking for this unit
+                                unit.targetRow = null; // Clear target
+                                unit.targetCol = null;
+                                unit.movementProgress = 0; // Reset remaining progress
+                                unit.previousRow = unit.row; // Reset previous on arrival
+                                unit.previousCol = unit.col;
+                                break; // Stop the unit's movement
+                            }
+                        } else {
+                            // First time visiting this specific hex for this unit
+                            unitHexVisits.set(currentHexKey, 1);
+                        }
+                    }
                     // If the unit has remaining movementProgress, the while loop continues
                     // to potentially move another step in the same tick.
 
