@@ -146,12 +146,12 @@ const TERRAIN_MOVEMENT_COSTS = {
 // Base movement capability per game hour (number of "movement cost units" covered per game hour)
 // Higher values mean faster movement
 const UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR = {
-    [UnitType.INFANTERY]: 8, // 10 cost units per game hour
-    [UnitType.ARTILLERY]: 5,
-    [UnitType.CAVALRY]: 15,
-    [UnitType.SUPPLY]: 4,
-    [UnitType.SPY]: 15, // Spy is fastest
-    [UnitType.GENERAL]: 10 // Nouveau : Général - Vitesse base (pour atteindre environ 10 de vitesse)
+    [UnitType.INFANTERY]: 3, // 10 cost units per game hour
+    [UnitType.ARTILLERY]: 2,
+    [UnitType.CAVALRY]: 5,
+    [UnitType.SUPPLY]: 2,
+    [UnitType.SPY]: 6, // Spy is fastest
+    [UnitType.GENERAL]: 4 // Nouveau : Général - Vitesse base (pour atteindre environ 10 de vitesse)
 };
 
 /**
