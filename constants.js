@@ -42,6 +42,8 @@ const UnitType = {
 };
 
 SOUND_TRUMPET_PATH = 'resources/trumpet.mp3';
+SOUND_VICTORY_PATH = 'resources/victoire.mp3';
+SOUND_DEFEAT_PATH = 'resources/defaite.mp3';
 
 // File paths for unit images
 const UNIT_IMAGE_PATHS = {

@@ -20,6 +20,8 @@ let currentUnits = []; // Array to hold the currently placed units (Populated by
 
 let audioContext;
 let trumpetBuffer;
+let musicDefeat;
+let musicVictory;
 let allUnitInvolvedCombat = new Set();
 
 let messageEndGame = null;
@@ -819,6 +821,7 @@ function drawClock(ctx, gameTimeInMinutes) {
     ctx.fillStyle = '#000';
     ctx.fill();
 
+    /*
     // Display digital time below the clock
     const digitalTimeX = clockCenterX;
     const digitalTimeY = clockCenterY + CLOCK_RADIUS + 15; // Position below the clock circle
@@ -830,6 +833,7 @@ function drawClock(ctx, gameTimeInMinutes) {
     ctx.fillStyle = '#000';
     ctx.textAlign = 'center';
     ctx.fillText(`${formattedHours}:${formattedMinutes}`, digitalTimeX, digitalTimeY);
+    */
 }
 
 
@@ -969,6 +973,11 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
         ctx.textBaseline = 'middle';
         ctx.font = '40px sans-serif';
 
+        if (messageEndGame.includes("VICTORY"))
+            playVictoryMusic();
+        else
+            playDefeatMusic();
+        
         ctx.fillStyle = 'rgba(0, 200, 0, 0.8)'; // Green for victory message
         // Draw a background rectangle for the message
         const textWidth = ctx.measureText(messageEndGame).width;
@@ -1122,6 +1131,24 @@ function playTrumpetSound() {
     }
 }
 
+function playVictoryMusic() {
+    if (musicVictory && audioContext) {
+        const source = audioContext.createBufferSource();
+        source.buffer = musicVictory;
+        source.connect(audioContext.destination);
+        source.start(0); // Play immediately
+    }
+}
+
+function playDefeatMusic() {
+    if (musicDefeat && audioContext) {
+        const source = audioContext.createBufferSource();
+        source.buffer = musicDefeat;
+        source.connect(audioContext.destination);
+        source.start(0); // Play immediately
+    }
+}
+
 async function loadSounds() {
     // Initialize AudioContext
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1129,6 +1156,18 @@ async function loadSounds() {
     // Load sound
     try {
         trumpetBuffer = await loadAudio(SOUND_TRUMPET_PATH); // Assuming SOUND_TRUMPET_PATH is defined in constants.js
+        console.log("Trumpet sound loaded successfully.");
+    } catch (error) {
+        console.error("Error loading trumpet sound:", error);
+    }
+    try {
+        musicVictory = await loadAudio(SOUND_VICTORY_PATH); // Assuming SOUND_TRUMPET_PATH is defined in constants.js
+        console.log("Trumpet sound loaded successfully.");
+    } catch (error) {
+        console.error("Error loading trumpet sound:", error);
+    }
+    try {
+        musicDefeat = await loadAudio(SOUND_DEFEAT_PATH); // Assuming SOUND_TRUMPET_PATH is defined in constants.js
         console.log("Trumpet sound loaded successfully.");
     } catch (error) {
         console.error("Error loading trumpet sound:", error);
@@ -1909,7 +1948,7 @@ function moveUnitStep(unit) {
         // Note: updateVisibility() devrait être appelé une seule fois par tick globalement,
         // mais pour l'instant, nous le mettons ici pour réactivité si une unité individuelle bouge.
         // Une meilleure approche serait de stocker un drapeau global 'movedThisTick' et de l'appeler à la fin de gameLoop.
-        //updateVisibility();
+        updateVisibility();
 
         // Si l'unité est arrivée à destination après ce pas
         if (unit.row === targetR && unit.col === targetC) {
@@ -2014,23 +2053,13 @@ function gameLoop(currentTime) {
         !unitMovementTimers.has(unit.id) // N'a pas de timer de mouvement déjà actif
     );
 
-    let movedThisTick = false; // Flag to track if any unit moved at least one hex
     unitsEligibleForMovementStart.forEach(unit => {
         // Démarrer le premier pas pour cette unité.
         // La fonction moveUnitStep s'occupera d'enchaîner les pas suivants.
         // On l'appelle directement une première fois pour initier le processus.
         originalConsoleLog(`[gameLoop] Initiating movement for Unit ID ${unit.id} towards (${unit.targetRow}, ${unit.targetCol}).`);
-        movedThisTick = true;
         moveUnitStep(unit);
     });
-
-    // Update visibility once per tick if any unit moved.
-    // Also updated when receiving STATE_SYNC or COMBAT_RESULT.
-    // Only update visibility if game is not over
-    if (!gameOver && movedThisTick) {
-        updateVisibility(); // Update visibility for the local player's army
-    }
-
 
     // --- Combat Time Tracking and Resolution ---
     // This section runs ONLY on the Blue client, as it is the combat authority.
