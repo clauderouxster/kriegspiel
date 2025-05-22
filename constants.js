@@ -195,7 +195,7 @@ const VISION_RANGES = {
 const MAX_RANGE = 4;
 // Combat Stats and Ranges per unit type
 const UNIT_COMBAT_STATS = {
-    [UnitType.ARTILLERY]: { attack: 15, defense: 15, range: { base: 3, hill_mountain: MAX_RANGE } }, // 4 cases sur colline/montagne, 3 partout ailleurs (pas de bonus montagne?) - Assuming Hill bonus applies only to hills as per prompt, adjusted to hill_mountain based on vision
+    [UnitType.ARTILLERY]: { attack: 20, defense: 20, range: { base: 3, hill_mountain: MAX_RANGE } }, // 4 cases sur colline/montagne, 3 partout ailleurs (pas de bonus montagne?) - Assuming Hill bonus applies only to hills as per prompt, adjusted to hill_mountain based on vision
     [UnitType.INFANTERY]: { attack: 10, defense: 10, range: { base: 2, hill_mountain: 3 } }, // 3 cases sur colline ou montagne, 2 partout ailleurs
     [UnitType.CAVALRY]: { attack: 15, defense: 10, range: { base: 1 } }, // 1 case partout (contact)
     [UnitType.SUPPLY]: { attack: 1, defense: 2, range: { base: 1 } }, // 1 case partout
