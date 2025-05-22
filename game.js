@@ -115,7 +115,7 @@ function connectToServer() {
 
     console.log(`Attempting WebSocket connection to ${serverAddress}...`);
     // Use ws:// for WebSocket, wss:// for Secure WebSocket
-    ws = new WebSocket(`ws://${serverAddress}`); // Assuming ws for local testing
+    ws = new WebSocket(`wss://${serverAddress}`); // Assuming ws for local testing
 
     ws.onopen = () => {
         console.log('WebSocket connection established.');

@@ -243,7 +243,7 @@
         <div class="network-controls">
             <button id="startButton" style="display: none;">Start</button>
             <label for="serverAddressInput">Server:</label>
-            <input type="text" id="serverAddressInput" placeholder="localhost:8080" value="localhost:8080">
+            <input type="text" id="serverAddressInput" placeholder="Detecting..." readonly>
             <button id="connectButton">Connect</button>
         </div>
     </div>
@@ -324,6 +324,36 @@
 
     <canvas id="gameCanvas"></canvas>
 
+    <script>
+        // Auto-detect server address based on current URL
+        function detectServerAddress() {
+            const currentHost = window.location.host;
+            const isHttps = window.location.protocol === 'https:';
+            
+            // If we're on ngrok (contains .ngrok)
+            if (currentHost.includes('.ngrok')) {
+                return currentHost; // Use the same host for WebSocket
+            }
+            // If we're on localhost or local IP
+            else if (currentHost.includes('localhost') || currentHost.startsWith('127.') || currentHost.startsWith('192.168.')) {
+                return 'localhost:6060'; // Default local development
+            }
+            // Fallback
+            else {
+                return "wss://" + currentHost;
+            }
+        }
+
+        // Set the detected server address
+        document.addEventListener('DOMContentLoaded', function() {
+            const serverInput = document.getElementById('serverAddressInput');
+            const detectedAddress = detectServerAddress();
+            serverInput.value = detectedAddress;
+            serverInput.placeholder = detectedAddress;
+            
+            console.log('Detected server address:', detectedAddress);
+        });
+    </script>
     <script src="constants.js"></script>
     <script src="utils.js"></script>
     <script src="mapGeneration.js"></script>
