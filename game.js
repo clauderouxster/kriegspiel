@@ -2014,7 +2014,7 @@ function gameLoop(currentTime) {
         !unitMovementTimers.has(unit.id) // N'a pas de timer de mouvement déjà actif
     );
 
-    let movedThisTick = false; // Flag to track if any unit moved at least one hex
+    //let movedThisTick = false; // Flag to track if any unit moved at least one hex
     unitsEligibleForMovementStart.forEach(unit => {
         // Démarrer le premier pas pour cette unité.
         // La fonction moveUnitStep s'occupera d'enchaîner les pas suivants.
@@ -2023,14 +2023,6 @@ function gameLoop(currentTime) {
         movedThisTick = true;
         moveUnitStep(unit);
     });
-
-    // Update visibility once per tick if any unit moved.
-    // Also updated when receiving STATE_SYNC or COMBAT_RESULT.
-    // Only update visibility if game is not over
-    if (!gameOver && movedThisTick) {
-        updateVisibility(); // Update visibility for the local player's army
-    }
-
 
     // --- Combat Time Tracking and Resolution ---
     // This section runs ONLY on the Blue client, as it is the combat authority.
