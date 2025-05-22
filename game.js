@@ -2390,7 +2390,6 @@ function gameLoop(currentTime) {
                 const healingRatePerGameMinute = maxHealth * 0.005; // Example: heal 0.5% of max HP per game minute
                 const healingAmount = healingRatePerGameMinute * gameMinutesToAdd; // Scale by actual elapsed game minutes
 
-                const oldHealth = unit.health;
                 unit.health = Math.min(maxHealth, unit.health + healingAmount);
             }
         });
