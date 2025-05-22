@@ -1359,76 +1359,6 @@ function updateDimensionsAndDraw() {
 // Uses originalConsoleLog, originalConsoleWarn.
 // ============================================================================
 
-/**
- * Gets the effective combat range for a unit considering its type and terrain.
- * Depends on UNIT_COMBAT_STATS, Terrain from constants.js.
- * Access global map.
- * Calls isValid.
- * Returns combat range in hexes, or 0 if invalid.
- */
-function getCombatRange(unitType, r, c, map, rows, cols) {
-    if (!isValid(r, c, rows, cols)) return 0; // Uses utils function, passed dims
-    const stats = UNIT_COMBAT_STATS[unitType]; // Uses constant
-    if (!stats || !stats.range) return 0;
-
-    const terrainType = map[r][c]; // Uses passed map
-
-    // Check for terrain-specific range bonuses
-    if (stats.range.hill_mountain !== undefined && (terrainType === Terrain.HILL || terrainType === Terrain.MOUNTAIN)) { // Uses constant
-        return stats.range.hill_mountain;
-    }
-    if (stats.range.hill !== undefined && terrainType === Terrain.HILL) { // Specific Hill bonus
-        return stats.range.hill;
-    }
-
-
-    // Return base range if no specific terrain bonus applies or exists
-    return stats.range.base !== undefined ? stats.range.base : 0;
-}
-
-
-/**
- * Identifies all units involved in a combat engagement centered around a primary unit.
- * Includes units in the same hex and adjacent hexes of the same army as the primary unit.
- * Units must be alive.
- * Depends on getNeighbors, getUnitAt from utils.js.
- * Access global currentUnits (via passed list), originalConsoleLog.
- */
-function getUnitsInvolvedInCombat(primaryUnit, allUnitsAlive, map, rows, cols) {
-    if (!primaryUnit || !allUnitsAlive || allUnitsAlive.length === 0) return [];
-
-    const involvedUnits = new Set();
-    const primaryHex = `${primaryUnit.row},${primaryUnit.col}`;
-    involvedUnits.add(primaryUnit); // Primary unit is always involved
-
-    // Check the primary unit's hex for other units of the same army
-    allUnitsAlive.forEach(unit => {
-        if (unit !== primaryUnit && unit.armyColor === primaryUnit.armyColor && unit.row === primaryUnit.row && unit.col === primaryUnit.col) {
-            involvedUnits.add(unit);
-        }
-    });
-
-
-    // Check adjacent hexes
-    const neighbors = getNeighbors(primaryUnit.row, primaryUnit.col, rows, cols); // Uses utils function, passed dims
-    neighbors.forEach(neighborHex => {
-        const [nR, nC] = neighborHex;
-        // Check if the neighbor hex is valid and contains units
-        if (isValid(nR, nC, rows, cols)) { // Uses utils function, passed dims
-            const unitsAtNeighbor = allUnitsAlive.filter(unit => unit && unit.row === nR && unit.col === nC); // Filter the alive units list
-
-            unitsAtNeighbor.forEach(unit => {
-                // Include units in the adjacent hex IF they are the same army as the primary unit
-                if (unit.armyColor === primaryUnit.armyColor) {
-                    involvedUnits.add(unit);
-                }
-            });
-        }
-    });
-
-    // Convert Set back to Array and filter out null/undefined entries just in case
-    return Array.from(involvedUnits).filter(unit => unit !== null && unit !== undefined);
-}
 
 /**
  * Calculates the effective combat range for a group of units involved in a single engagement.
@@ -1439,48 +1369,6 @@ function getUnitsInvolvedInCombat(primaryUnit, allUnitsAlive, map, rows, cols) {
  * Access global UNIT_COMBAT_STATS.
  * Uses originalConsoleWarn.
  */
-function getEffectiveGroupCombatRange(unitsList, unitCombatStats, unitTypeConstants) {
-    if (!unitsList || unitsList.length === 0) {
-        // originalConsoleLog("[getEffectiveGroupCombatRange] Unit list is empty, returning 0 range.");
-        return 0; // No units, no range
-    }
-
-    let minBaseRange = 0;
-    let hasCavalry = false;
-
-    for (const unit of unitsList) {
-        // Ensure unit and its type/stats are valid
-        if (unit && unitCombatStats[unit.type]) {
-            if (unit.type === unitTypeConstants.CAVALRY) {
-                hasCavalry = true;
-            }
-
-            // Get the base range defined in UNIT_COMBAT_STATS
-            const baseRange = unitCombatStats[unit.type].range?.base; // Use optional chaining
-
-            if (baseRange !== undefined && baseRange !== null && baseRange !== Infinity) {
-                minBaseRange = Math.max(minBaseRange, baseRange);
-            } else {
-                // If a unit has an undefined/null/Infinity base range, treat it as having 0 range for the group min
-                minBaseRange = Math.max(minBaseRange, 0);
-            }
-        } else if (unit) { // Check if unit is not null/undefined before accessing properties
-            originalConsoleWarn(`[getEffectiveGroupCombatRange] Skipping invalid unit in list or unit type not found in combat stats. Unit:`, unit);
-            // Treat invalid units as contributing 0 to the minimum range calculation
-            minBaseRange = Math.max(minBaseRange, 0);
-        }
-    }
-
-    // Apply the Cavalry rule: if any Cavalry is present, the group's effective range is 1 (melee)
-    //if (hasCavalry) {
-    // originalConsoleLog("[getEffectiveGroupCombatRange] Cavalry detected in group, effective range is 1.");
-    //   return 1;
-    //}
-
-    // Return the minimum base range found among non-Cavalry units, or 0 if no valid ranges were found
-    // originalConsoleLog(`[getEffectiveGroupCombatRange] No Cavalry. Minimum base range in group: ${minBaseRange === Infinity ? 0 : minBaseRange}.`);
-    return minBaseRange === Infinity ? 0 : minBaseRange;
-}
 
 function getEffectiveCombatRange(unit, unitCombatStats, unitTypeConstants) {
     let minBaseRange = 0;
@@ -1518,38 +1406,13 @@ function getEffectiveCombatRange(unit, unitCombatStats, unitTypeConstants) {
 }
 
 
-/**
- * Calculates the total attack or defense stat for a list of units.
- * Depends on UNIT_COMBAT_STATS from constants.js.
- * Access global originalConsoleWarn.
- */
-function calculateTotalStat(unitsList, statType) {
-    let totalStat = 0;
-    if (!unitsList || !unitsList.size) return totalStat;
-
-    unitsList.forEach(unit => {
-        if (unit && UNIT_COMBAT_STATS[unit.type]) { // Uses constant
-            const stat = UNIT_COMBAT_STATS[unit.type][statType]; // Uses constant
-            if (stat !== undefined && stat !== null) {
-                // Scale stat by current health percentage
-                const maxHealth = UNIT_HEALTH[unit.type] !== undefined ? UNIT_HEALTH[unit.type] : 1; // Uses constant
-                const healthFactor = Math.max(0, unit.health) / maxHealth; // Ensure health is not negative
-                totalStat += stat * healthFactor;
-            }
-        } else if (unit) {
-            originalConsoleWarn(`[calculateTotalStat] Skipping unit with unknown type or stats not found:`, unit);
-        }
-    });
-    return totalStat;
-}
-
 function evaluateAttackDefense(attacker, defender) {
-    let totalStatAttacker = 0;
-    let totalStatDefender = 0;
     //We need to evaluate the different attack values
     //First there might be some attacker that cannot attack a defender because they are too far
     attackList = new Set();
     defenseList = new Set();
+    attackInBattle = new Set();
+    defenseInBattle = new Set();
 
     //First we check that each unit is in range
     //cavalry could be part of a group but not be in range of any other units
@@ -1558,8 +1421,10 @@ function evaluateAttackDefense(attacker, defender) {
         defender.forEach(unitB => {
             const dst = getHexDistance(unitA.row, unitA.col, unitB.row, unitB.col);
             //Unit B is in range, we keep it
-            if (dst <= rangeA)
+            if (dst <= rangeA) {
                 attackList.add(unitA);
+                defenseInBattle.add(unitB);
+            }
         });
     });
 
@@ -1568,11 +1433,15 @@ function evaluateAttackDefense(attacker, defender) {
         attacker.forEach(unitA => {
             const dst = getHexDistance(unitA.row, unitA.col, unitB.row, unitB.col);
             //Unit A is in range, we keep it
-            if (dst <= rangeB)
+            if (dst <= rangeB) {
                 defenseList.add(unitB);
+                attackInBattle.add(unitA);
+            }
         });
     });
 
+    let totalStatAttacker = 0;
+    let totalStatDefender = 0;
     attackList.forEach(unit => {
         const stat= UNIT_COMBAT_STATS[unit.type]["attack"]; // Uses constant
         totalStatAttacker += stat;
@@ -1583,7 +1452,7 @@ function evaluateAttackDefense(attacker, defender) {
         totalStatDefender += stat;
     });
 
-    return {totalStatAttacker, totalStatDefender};
+    return {totalStatAttacker, totalStatDefender, attackInBattle, defenseInBattle};
 }
 
 /**
@@ -1663,6 +1532,7 @@ function resolveCombat(totalAttackerAttack, totalDefenderDefense) {
     return { outcome, damage, targetSide };
 }
 
+
 /**
  * Distributes damage among a list of units. Reduces health.
  * Returns a list of units that were eliminated (health <= 0).
@@ -1689,127 +1559,6 @@ function distributeDamage(unitsList, damage) {
     });
 
     return eliminatedUnits;
-}
-
-
-// ============================================================================
-// Pathfinding Logic (Basic Weighted BFS/Dijkstra - kept for reference, not used for movement)
-// Depends on isValid, getNeighbors, getMovementCost, getUnitAt, getUnitTypeName from utils.js
-// Depends on ARMY_COLOR_BLUE, ARMY_COLOR_RED from constants.js.
-// Access global map, currentUnits, currentMapRows, currentMapCols, originalConsoleError, originalConsoleLog.
-// ============================================================================
-
-/**
- * Finds the shortest path in terms of movement cost from a start hex to a target hex
- * using a Dijkstra-like weighted BFS. Accounts for terrain costs.
- * Returns an array of [row, col] hex coordinates representing the path,
- * or null if no path is found.
- * Depends on isValid, getNeighbors, getMovementCost, getUnitAt, getUnitTypeName from utils.js.
- * Depends on ARMY_COLOR_BLUE, ARMY_COLOR_RED from constants.js.
- * Access global map, currentUnits, currentMapRows, currentMapCols, originalConsoleError, originalConsoleLog.
- * NOTE: This function is currently used for path calculation ideas, but the game loop
- * moves units step-by-step without pre-calculating the full path.
- */
-function findPath(startR, startC, targetR, targetC, unitType, map, rows, cols, currentUnits) {
-    // Basic check if start or target are invalid or same
-    if (!isValid(startR, startC, rows, cols)) { // Uses utils function, passed dims
-        originalConsoleError(`[findPath] Invalid start (${startR}, ${startC}) coordinates.`);
-        return null;
-    }
-    if (!isValid(targetR, targetC, rows, cols)) {
-        originalConsoleError(`[findPath] Invalid target (${targetR}, ${targetC}) coordinates.`);
-        return null;
-    }
-
-    if (startR === targetR && startC === targetC) {
-        // originalConsoleLog("[findPath] Start and target are the same, path is just the start.");
-        return [[startR, startC]]; // Path is the start hex itself
-    }
-
-    const distances = Array(rows).fill(null).map(() => Array(cols).fill(Infinity));
-    const previousHexes = Array(rows).fill(null).map(() => Array(cols).fill(null)); // To reconstruct the path
-    const priorityQueue = [{ r: startR, c: startC, cost: 0 }]; // {hex, accumulated cost}
-
-    distances[startR][startC] = 0;
-
-    // Simple priority queue (can be optimized with a proper min-heap)
-    priorityQueue.sort((a, b) => a.cost - b.cost);
-
-    originalConsoleLog(`[findPath] Starting pathfinding from (${startR}, ${startC}) to (${targetR}, ${targetC}) for unit type ${getUnitTypeName(unitType)}.`); // Uses utils function
-
-    while (priorityQueue.length > 0) {
-        // Get the hex with the lowest cost from the queue
-        const { r: currentR, c: currentC, cost: currentCost } = priorityQueue.shift();
-
-        // If we reached the target, reconstruct the path
-        if (currentR === targetR && currentC === targetC) {
-            const path = [];
-            let stepR = targetR;
-            let stepC = targetC;
-            while (stepR !== null && stepC !== null) {
-                path.push([stepR, stepC]);
-                const prev = previousHexes[stepR][stepC];
-                if (prev) {
-                    stepR = prev[0];
-                    stepC = prev[1];
-                } else {
-                    // Should only happen for the start node
-                    stepR = null;
-                    stepC = null;
-                }
-            }
-            path.reverse(); // Path is built backwards, reverse it
-            originalConsoleLog(`[findPath] Path found! Length: ${path.length}. Total Cost: ${distances[targetR][targetC].toFixed(2)}.`);
-            // originalConsoleLog("[findPath] Path:", path);
-            return path;
-        }
-
-        // If the current cost is already greater than the recorded distance (due to priority queue simple implementation)
-        if (currentCost > distances[currentR][currentC]) {
-            continue;
-        }
-
-        // Explore neighbors
-        const neighbors = getNeighbors(currentR, currentC, currentMapRows, currentMapCols); // Uses utils function, passed dims
-
-        for (const neighbor of neighbors) {
-            const neighborR = neighbor[0];
-            const neighborC = neighbor[1];
-
-            if (!isValid(neighborR, neighborC, currentMapRows, currentMapCols)) continue; // Uses utils function, passed dims
-
-            const terrainType = map[neighborR][neighborC]; // Uses passed map
-            const movementCost = getMovementCost(terrainType, unitType); // Uses utils function, passed unitType
-
-            // Ignore impassable terrain
-            if (movementCost === Infinity) continue;
-
-            // Check if the neighbor hex is occupied by another unit (cannot move THROUGH other units)
-            // This check needs to be against the *current* state of all units
-            const unitAtNeighbor = getUnitAt(neighborR, neighborC, currentUnits.filter(u => u !== null && u !== undefined && u.health > 0), "findPath - occupation check"); // Uses utils function, global currentUnits (filtered)
-            // Important: An unit *can* end its move on a hex that was previously occupied, if that unit moves away.
-            // But during pathfinding, we assume obstacles are static.
-            // For step-by-step movement in gameLoop, the occupation check needs to be dynamic.
-            // This findPath function is primarily for conceptual paths or visualization, not the core game loop movement.
-            if (unitAtNeighbor !== null) continue;
-
-
-            const newCost = currentCost + movementCost;
-
-            // If this path is shorter than the previously recorded shortest path to the neighbor
-            if (newCost < distances[neighborR][neighborC]) {
-                distances[neighborR][neighborC] = newCost;
-                previousHexes[neighborR][neighborC] = [currentR, currentC]; // Store the path
-                priorityQueue.push({ r: neighborR, c: neighborC, cost: newCost });
-                // Re-sort the simple priority queue
-                priorityQueue.sort((a, b) => a.cost - b.cost);
-            }
-        }
-    }
-
-    // If the loop finishes and the target was not reached, no path exists
-    originalConsoleWarn(`[findPath] No path found from (${startR}, ${startC}) to (${targetR}, ${targetC}) for unit type ${getUnitTypeName(unitType)}. Total reachable hexes checked: ${Object.keys(distances).length}.`); // Uses utils function
-    return null;
 }
 
 
@@ -1935,22 +1684,6 @@ function updateVisibility() {
             }
         });
     }
-    // originalConsoleLog(`[updateVisibility] Ensured ${ownUnitHexesVisibleCount} player unit hexes are visible.`); // *** ADDED LOGGING TOO CHATTY***
-    // --- End ensure hexes with player units are visible ---
-
-    // *** ADDED LOGGING: Count total visible hexes ***
-    // let totalVisibleCount = 0;
-    // if (visibleHexes && visibleHexes.length > 0 && visibleHexes[0] && visibleHexes[0].length > 0) {
-    //      for (let r = 0; r < currentMapRows; r++) {
-    //          for (let c = 0; c < currentMapCols; c++) {
-    //              if (visibleHexes[r][c]) {
-    //                  totalVisibleCount++;
-    //              }
-    //          }
-    //      }
-    // }
-    // originalConsoleLog(`[updateVisibility] Finished calculating visible hexes. Total visible hexes: ${totalVisibleCount}.`); // Too chatty
-    // *** END ADDED LOGGING ***
 }
 
 /**
@@ -2475,13 +2208,11 @@ function gameLoop(currentTime) {
                     // originalConsoleLog(`[gameLoop] RESOLVING COMBAT! Engagement between Unit ID ${unitA.id} (${getUnitTypeName(unitA.type)} ${unitA.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}) at (${unitA.row}, ${unitA.col}) and Unit ID ${unitB.id} (${getUnitTypeName(unitB.type)} ${unitB.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}) at (${unitB.row}, ${unitB.col}).`);
 
                     const stats = evaluateAttackDefense(attackerParticipatingUnits, defenderParticipatingUnits);
+
                     const totalAttackerAttack = stats.totalStatAttacker;
                     const totalDefenderDefense = stats.totalStatDefender;
 
                     // --- Aggregation of Stats ---
-                    //const totalAttackerAttack = calculateTotalStat(attackerParticipatingUnits, 'attack');
-                    //const totalDefenderDefense = calculateTotalStat(defenderParticipatingUnits, 'defense');
-
                     originalConsoleLog(`[gameLoop] Aggregated Stats: Total Attacker Attack = ${totalAttackerAttack.toFixed(2)}, Total Defender Defense = ${totalDefenderDefense.toFixed(2)}.`);
                     // --- END Aggregation of Stats ---
 
@@ -2510,12 +2241,12 @@ function gameLoop(currentTime) {
                         // Apply damage to the units in the relevant group(s)
                         if (combatResult.targetSide === 'defender' || combatResult.targetSide === 'both') {
                             originalConsoleLog(`[gameLoop] Applying ${combatResult.damage.toFixed(2)} damage to units in the Defender camp.`);
-                            const eliminatedDefender = distributeDamage(defenderParticipatingUnits, combatResult.damage); // Uses game function
+                            const eliminatedDefender = distributeDamage(stats.defenseInBattle, combatResult.damage); // Uses game function
                             unitsEliminatedThisCombatInstance.push(...eliminatedDefender);
                         }
                         if (combatResult.targetSide === 'attacker' || combatResult.targetSide === 'both') {
                             originalConsoleLog(`[gameLoop] Applying ${combatResult.damage.toFixed(2)} damage to units in the Attacker camp.`);
-                            const eliminatedAttacker = distributeDamage(attackerParticipatingUnits, combatResult.damage); // Uses game function
+                            const eliminatedAttacker = distributeDamage(stats.attackInBattle, combatResult.damage); // Uses game function
                             unitsEliminatedThisCombatInstance.push(...eliminatedAttacker);
                         }
                     }
