@@ -33,6 +33,12 @@ let allImagesLoaded = false; // Flag to indicate if all images are ready
 
 // Unit Selection Variable
 let selectedUnit = null; // To store the currently selected unit object
+// NOUVELLES VARIABLES POUR LA SÉLECTION DE ZONE
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let dragCurrentX = 0;
+let dragCurrentY = 0;
 
 // Game Time Variables
 let gameTimeInMinutes = 6 * 60; // Start at 06:00 (6 hours * 60 minutes)
@@ -1069,6 +1075,21 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
         ctx.shadowOffsetY = 0;
     }
     // --- End Draw Chat Message ---
+
+    // Dessiner le rectangle de sélection si le glisser-déposer est en cours
+    if (isDragging) {
+        const x = Math.min(dragStartX, dragCurrentX);
+        const y = Math.min(dragStartY, dragCurrentY);
+        const width = Math.abs(dragStartX - dragCurrentX);
+        const height = Math.abs(dragStartY - dragCurrentY);
+
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)'; // Couleur verte semi-transparente
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Remplissage vert clair semi-transparent
+        ctx.fillRect(x, y, width, height);
+    }
 
 
     // Draw the game clock (always visible)
@@ -2492,17 +2513,6 @@ function loadGameStateFromJson(state) {
     // Recalculate local visibility after loading state
     updateVisibility();
 
-    // Synchronize combat hexes if present in the loaded state (for local saves)
-    /*
-    if (state.combatHexes && Array.isArray(state.combatHexes)) {
-        combatHexes.clear();
-        state.combatHexes.forEach(hexKey => combatHexes.add(hexKey));
-        originalConsoleLog(`[loadGameStateFromJson] Loaded ${combatHexes.size} combat hexes.`);
-    } else {
-        combatHexes.clear(); // Ensure combat hexes are clear if not in save
-    }
-    */
-
     originalConsoleLog("[loadGameStateFromJson] Game state loaded successfully. Visibility updated.");
 
     // The gameLoop will be started right after this call in the ws.onmessage handler ('GAME_STATE').
@@ -2548,6 +2558,105 @@ function loadGameStateFromJson(state) {
  * Accesses global canvas, map, currentUnits, selectedUnits, currentMapRows, currentMapCols, playerArmyColor, ws, visibleHexes.
  * Uses originalConsoleLog, originalConsoleWarn.
  */
+// NOUVELLE FONCTION POUR SÉLECTIONNER DES UNITÉS DANS UNE ZONE
+function selectUnitsInArea(rectX, rectY, rectEndX, rectEndY) {
+    const selectedUnitsInArea = [];
+
+    // Calculer les bords du rectangle de sélection
+    const rectLeft = Math.min(rectX, rectEndX);
+    const rectRight = Math.max(rectX, rectEndX);
+    const rectTop = Math.min(rectY, rectEndY);
+    const rectBottom = Math.max(rectY, rectEndY);
+
+    currentUnits.forEach(unit => {
+        // Calculer les bords de l'unité
+
+        // Vérifier si l'unité chevauche le rectangle de sélection
+        if (unit.row >= rectLeft &&
+            unit.row <= rectRight &&
+            unit.col >= rectTop &&
+            unit.col <= rectBottom &&
+            unit.armyColor === playerArmyColor) {
+            selectedUnitsInArea.push(unit);
+        }
+    });
+
+    return selectedUnitsInArea;
+}
+
+
+// MODIFICATION DE handleCanvasClick POUR GÉRER LE DÉBUT DU GLISSER-DÉPOSER
+function handleCanvasMouseDown(event) {
+    const mouseX = event.offsetX;
+    const mouseY = event.offsetY;
+
+    // Commencez la sélection de zone
+    isDragging = true;
+    dragStartX = mouseX;
+    dragStartY = mouseY;
+    dragCurrentX = mouseX;
+    dragCurrentY = mouseY;
+}
+
+// NOUVEAU GESTIONNAIRE D'ÉVÉNEMENTS POUR LE DÉPLACEMENT DE LA SOURIS PENDANT LE GLISSER-DÉPOSER
+function handleCanvasMouseMove(event) {
+    if (isDragging) {
+        dragCurrentX = event.offsetX;
+        dragCurrentY = event.offsetY;
+        // Redessine le jeu pour montrer le rectangle de sélection en temps réel
+        drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors);
+    }
+}
+
+// MODIFICATION DE handleCanvasClick POUR GÉRER LA FIN DU GLISSER-DÉPOSER ET LA SÉLECTION D'UNITÉS
+function handleCanvasMouseUp(event) {
+    if (isDragging) {
+        isDragging = false;
+
+        const mouseX = event.offsetX;
+        const mouseY = event.offsetY;
+
+        // Déterminez les coordonnées finales du rectangle de sélection
+        const rectX = Math.min(dragStartX, mouseX);
+        const rectY = Math.min(dragStartY, mouseY);
+        const rectWidth = Math.abs(dragStartX - mouseX);
+        const rectHeight = Math.abs(dragStartY - mouseY);
+
+
+        // Si le rectangle est trop petit (juste un clic), traitez-le comme un clic unique
+        if (rectWidth < 5 && rectHeight < 5) { // Un seuil pour distinguer un clic d'un drag
+            handleCanvasClick(event); // Appeler l'ancienne fonction de clic unique
+        } else {
+            // Sélectionner les unités dans la zone
+            const clickedHex = getHexFromCoordinates(rectX, rectY, HEX_SIZE); // Uses utils function, global HEX_SIZE
+            const clickedEnd = getHexFromCoordinates(rectX + rectWidth, rectY + rectHeight, HEX_SIZE); // Uses utils function, global HEX_SIZE
+            selectedUnits = selectUnitsInArea(clickedHex.r, clickedHex.c, clickedEnd.r, clickedEnd.c);
+            if (selectedUnits.length > 0) {
+                // Pour l'instant, sélectionnez la première unité trouvée pour simplifier.
+                // Vous pouvez adapter cela pour sélectionner plusieurs unités ou des groupes.
+                // Par exemple, vous pouvez vouloir stocker toutes les unités sélectionnées
+                // dans un tableau 'selectedUnits' au lieu de 'selectedUnit'.
+                selectedUnit = selectedUnits[0]; // Sélectionnez la première unité du groupe
+                console.log(`Selected ${selectedUnits.length} units.`);
+            } else {
+                selectedUnit = null; // Désélectionner si aucune unité n'est trouvée
+                selectedUnits = [];
+            }
+            // Mettre à jour l'affichage après la sélection
+            drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors);
+        }
+    }
+}
+
+// NOUVELLE FONCTION D'INITIALISATION DES ÉVÉNEMENTS (ou modification de votre initGame s'il existe)
+// Assurez-vous que ces écouteurs d'événements sont ajoutés au bon moment (probablement dans initGame)
+function setupCanvasEventListeners() {
+    //canvas.addEventListener('click', handleCanvasClick);
+    canvas.addEventListener('mousedown', handleCanvasMouseDown);
+    canvas.addEventListener('mousemove', handleCanvasMouseMove);
+    canvas.addEventListener('mouseup', handleCanvasMouseUp);
+}
+
 function handleCanvasClick(event) {
     // Ensure game state is ready for interaction (multiplayer check is now inside for placing orders)
     if (!canvas || !map || !currentUnits || currentMapRows === 0 || currentMapCols === 0 || !visibleHexes) { // Added map and visibleHexes check
@@ -3519,8 +3628,8 @@ window.addEventListener('DOMContentLoaded', () => {
         // *** END NEW ***
 
 
-        // Canvas click handler for selection and movement orders
-        canvas.addEventListener('click', handleCanvasClick);
+        // Canvas click handler for selection and movement orders        
+        setupCanvasEventListeners();
         originalConsoleLog("[DOMContentLoaded] Canvas click event listener attached.");
 
         // The game loop is now started when the player is assigned a color and state is ready.
