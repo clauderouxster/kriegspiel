@@ -70,14 +70,14 @@ const CENTER_AREA_PERCENT = 0.5; // 50% of the map center
 
 // Base height used for scaling lake and forest generation parameters
 const BASE_HEIGHT_FOR_LAKE_SCALING = 40; // For a 40-row map, these are the base values
-const BASE_LAKE_SIZE_MIN = 2; // Updated: Smaller minimum radius for lakes
-const BASE_LAKE_SIZE_MAX = 10; // Updated: Smaller maximum radius for lakes
-const BASE_MAX_LAKES_FACTOR = 2.0; // Updated: Higher factor to reduce max lakes (e.g., rows / 2.0)
+const BASE_LAKE_SIZE_MIN = 5; // Updated: Smaller minimum radius for lakes
+const BASE_LAKE_SIZE_MAX = 15; // Updated: Smaller maximum radius for lakes
+const BASE_MAX_LAKES_FACTOR = 1.2; // Updated: Higher factor to reduce max lakes (e.g., rows / 2.0)
 
 const BASE_HEIGHT_FOR_FOREST_SCALING = 40; // For a 40-row map, these are the base values
 const BASE_FOREST_SIZE_MIN = 5; // Minimum radius for forests at base height
 const BASE_FOREST_SIZE_MAX = 15; // Maximum radius for forests at base height
-const BASE_MAX_FOREST_FACTOR = 0.1; // Max number of forests as a factor of total hexes (at base height)
+const BASE_MAX_FOREST_FACTOR = 1; // Max number of forests as a factor of total hexes (at base height)
 
 // Rendering constants
 const HEX_SIZE = 20; // Size of each hexagon from center to vertex

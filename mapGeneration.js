@@ -84,7 +84,7 @@ function generateMap(rows, cols, mountainProb,
     }
 
     // Step 2: Place Lakes (Capped at 2-5 lakes, small sizes)
-    const numLakesToPlace = Math.floor(Math.random() * 4) + 2; // Randomly choose 2 to 5 lakes
+    const numLakesToPlace = Math.floor(Math.random() * calculatedMaxLakes) + 3; // Randomly choose 2 to 5 lakes
     console.log(`Attempting to place ${numLakesToPlace} lakes`);
     for (let i = 0; i < numLakesToPlace; i++) {
         const targetLakeSize = Math.floor(Math.random() * (calculatedLakeSizeMax - calculatedLakeSizeMin + 1)) + calculatedLakeSizeMin;
@@ -143,7 +143,7 @@ function generateMap(rows, cols, mountainProb,
     }
 
     // Step 4: Place Forests (Capped at 3-7 forests)
-    const numForestsToPlace = Math.floor(Math.random() * 5) + 3; // Randomly choose 3 to 7 forests
+    const numForestsToPlace = Math.floor(Math.random() * calculatedMaxForests) + 3; // Randomly choose 3 to 7 forests
     console.log(`Attempting to place ${numForestsToPlace} forests`);
     for (let i = 0; i < numForestsToPlace; i++) {
         const targetForestSize = Math.floor(Math.random() * (calculatedForestSizeMax - calculatedForestSizeMin + 1)) + calculatedForestSizeMin;
