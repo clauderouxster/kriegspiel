@@ -977,7 +977,7 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
             playVictoryMusic();
         else
             playDefeatMusic();
-        
+
         ctx.fillStyle = 'rgba(0, 200, 0, 0.8)'; // Green for victory message
         // Draw a background rectangle for the message
         const textWidth = ctx.measureText(messageEndGame).width;
@@ -2337,6 +2337,7 @@ function gameLoop(currentTime) {
                             // If a general was eliminated and game is over, no need to process more combat instances in this interval
                             return; // Exit the forEach for unitB
                         }
+                        updateVisibility();
                     }
                     // *** END NEW : Check for General elimination ***
 
@@ -2380,7 +2381,7 @@ function gameLoop(currentTime) {
 
                     // If game is over (checked within the General elimination block), break out of further combat checks
                     if (gameOver) return; // Exit the forEach for unitA
-                });
+                });                
             }
             if (oneCombat == false)
                 allUnitInvolvedCombat.clear();
