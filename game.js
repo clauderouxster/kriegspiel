@@ -704,29 +704,6 @@ function drawHex(ctx, x, y, size, color) {
     ctx.stroke();
 }
 
-/**
- * Draws the entire map background (terrain).
- */
-function drawMap(ctx, map, size, terrainColors) {
-    if (!ctx || !map) return;
-
-    const rows = map.length;
-    const cols = map[0].length;
-
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            const { x, y } = getHexCenter(r, c, size);
-            const terrainType = map[r][c];
-            // Ensure temporary/unassigned states are drawn as a default (e.g., flat)
-            let displayTerrainType = terrainType;
-            if (displayTerrainType < 0) {
-                displayTerrainType = Terrain.FLAT;
-            }
-            const color = terrainColors[displayTerrainType];
-            drawHex(ctx, x, y, size, color);
-        }
-    }
-}
 
 /**
  * Draws a unit icon (image) centered on a hex.
@@ -1235,11 +1212,11 @@ function loadUnitImages(callback) {
 // Depends on calculateMapDimensions, generateMap from mapGeneration.js.
 // Depends on createInitialUnits, unitIdCounter (global counter) from unitManagement.js.
 // Depends on HEX_SIZE, TerrainColors, UnitType, ARMY_COLOR_BLUE, ARMY_COLOR_RED from constants.js.
-// Depends on drawMap, drawMapAndUnits, updateVisibility from this file.
+// Depends on drawMapAndUnits, updateVisibility from this file.
 // Accesses global canvas, ctx, map, currentMapRows, currentMapCols, currentUnits, gameTimeInMinutes, lastCombatGameTimeInMinutes, playerArmyColor, ws.
 // Uses originalConsoleLog, originalConsoleError.
 // Accesses mapHeightSelect, unit type count inputs.
-// Calls drawMap, createInitialUnits, drawMapAndUnits, updateVisibility, startSyncInterval.
+// Calls createInitialUnits, drawMapAndUnits, updateVisibility, startSyncInterval.
 // ============================================================================
 /**
  * Reads desired map dimensions from UI, generates a new map, places units, and redraws.
@@ -1249,11 +1226,11 @@ function loadUnitImages(callback) {
  * Depends on calculateMapDimensions, generateMap from mapGeneration.js.
  * Depends on createInitialUnits, unitIdCounter (global counter) from unitManagement.js.
  * Depends on HEX_SIZE, TerrainColors, UnitType, ARMY_COLOR_BLUE, ARMY_COLOR_RED from constants.js.
- * Depends on drawMap, drawMapAndUnits, updateVisibility from this file.
+ * Depends on drawMapAndUnits, updateVisibility from this file.
  * Accesses global canvas, ctx, map, currentMapRows, currentMapCols, currentUnits, gameTimeInMinutes, lastCombatGameTimeInMinutes, playerArmyColor, ws.
  * Uses originalConsoleLog, originalConsoleError.
  * Accesses mapHeightSelect, unit type count inputs.
- * Calls drawMap, createInitialUnits, drawMapAndUnits, updateVisibility, startSyncInterval.
+ * Calls createInitialUnits, drawMapAndUnits, updateVisibility, startSyncInterval.
  */
 function updateDimensionsAndDraw() {
     originalConsoleLog("[updateDimensionsAndDraw] Starting map generation and unit placement.");
@@ -3062,7 +3039,7 @@ function handleGameOver(winningArmyColor) {
 // ============================================================================
 // Save and Load Game Logic (Local Save/Load - less priority in MP)
 // Depends on global map, currentUnits, currentMapRows, currentMapCols, gameTimeInMinutes, visibleHexes, combatHexes.
-// Depends on updateVisibility, drawMap, drawMapAndUnits.
+// Depends on updateVisibility, drawMapAndUnits.
 // Uses JSON.stringify, JSON.parse, Blob, URL.createObjectURL, URL.revokeObjectURL, FileReader.
 // Uses originalConsoleLog, originalConsoleError.
 // Accesses filenameInput, loadFileInput.
@@ -3191,7 +3168,7 @@ function loadGame() {
 /**
  * Handles the change event on the hidden file input, triggered after a file is selected.
  * Reads the selected file and attempts to load the game state LOCALLY.
- * Depends on updateVisibility, drawMap, drawMapAndUnits.
+ * Depends on updateVisibility, drawMapAndUnits.
  * Uses FileReader, JSON.parse, originalConsoleLog, originalConsoleError.
  * Accesses global gameLoopInterval, selectedUnit, combatHexes, ws, playerArmyColor, syncIntervalId.
  */
