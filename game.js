@@ -450,8 +450,8 @@ function handleReceivedStateSync(data) {
 
         // Adjust canvas size based on synced map dimensions (important if Blue generated a different size)
         if (canvas && ctx) {
-            const canvasWidth = (currentMapCols + 10) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5;
-            const canvasHeight = (currentMapRows + 3) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20;
+            const canvasWidth = (currentMapCols + currentMapCols/6) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5;
+            const canvasHeight = (currentMapRows + currentMapRows/7) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20;
             // Only resize if dimensions actually changed significantly to avoid unnecessary redraws
             if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
                 canvas.width = canvasWidth;
@@ -1274,8 +1274,8 @@ function updateDimensionsAndDraw() {
 
 
     // Adjust canvas size based on calculated map dimensions
-    const canvasWidth = (currentMapCols + 10) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5; // Hex grid width calculation
-    const canvasHeight = (currentMapRows + 3) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20; // Height including clock and padding
+    const canvasWidth = (currentMapCols + currentMapCols/6) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5; // Hex grid width calculation
+    const canvasHeight = (currentMapRows + currentMapRows/7) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20; // Height including clock and padding
 
     if (canvas) { // Check if canvas element exists
         canvas.width = canvasWidth;
@@ -2488,8 +2488,8 @@ function loadGameStateFromJson(state) {
 
     // Resize the canvas to match the loaded map size
     if (canvas && ctx && map) {
-        const canvasWidth = (currentMapCols + 10) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5;
-        const canvasHeight = (currentMapRows + 3) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20;
+        const canvasWidth = (currentMapCols + currentMapCols/6) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5;
+        const canvasHeight = (currentMapRows + currentMapRows/7) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20;
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
 
@@ -3292,8 +3292,8 @@ function handleFileSelect(event) {
         selectedUnit = null; // Clear selected unit
 
         // Ensure canvas dimensions are correct for the loaded map size
-        const canvasWidth = (currentMapCols + 10) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5; // Hex grid width calculation
-        const canvasHeight = (currentMapRows + 3) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20; // Height including clock and padding
+        const canvasWidth = (currentMapCols + currentMapCols/6) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5; // Hex grid width calculation
+        const canvasHeight = (currentMapRows + currentMapRows/7) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20; // Height including clock and padding
 
         if (canvas) { // Check if canvas element exists
             canvas.width = canvasWidth;
