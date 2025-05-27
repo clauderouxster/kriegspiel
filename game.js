@@ -2006,22 +2006,24 @@ function gameLoop(currentTime) {
             const engagementsProcessedBleu = new Set();
             const engagementsProcessedRouge = new Set();
             // Filter units to only include living ones for combat checks
-            //const unitsForCombatCheck = currentUnits.filter(unit => unit !== null && unit !== undefined && unit.health > 0);
-
-            const lesBleus = currentUnits.filter(unit =>
-                //const unitAStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unit.id);
-                (unit !== null && unit !== undefined && unit.health > 0 && unit.armyColor === ARMY_COLOR_BLUE)
-            );
-
-            const lesRouges = currentUnits.filter(unit =>
-                //const unitAStillExistsAndAlive = unitsForCombatCheck.find(u => u.id === unit.id);
-                (unit !== null && unit !== undefined && unit.health > 0 && unit.armyColor === ARMY_COLOR_RED)
-            );
+            let lesBleus = [];
+            let lesRouges = [];
+            currentUnits.forEach(unit => {
+                if (unit !== null && unit !== undefined && unit.health > 0) {
+                    if (unit.armyColor === ARMY_COLOR_BLUE)
+                        lesBleus.push(unit);
+                    else
+                        lesRouges.push(unit);
+                }
+            })
 
             let oneCombat = false;
             if (lesBleus && lesRouges) {
                 // Iterate through all living units to check for engagements FROM them
                 lesBleus.forEach(unitBlue => {
+                    if (unitBlue === null || unitBlue === undefined || unitBlue.health <= 0)
+                        return;
+
                     // Only initiate checks FROM our units (Blue) towards enemies (Red)
                     // This simplifies the N^2 check, only need to check Blue units vs Red units.
                     // Combat logic is symmetric and calculates attack/defense for both sides regardless of who initiates.
@@ -2043,23 +2045,25 @@ function gameLoop(currentTime) {
                     voisins.forEach(unitBlue => {
                         const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
                         lesRouges.forEach(unitRed => {
-                            const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
-                            //Unit B is in range, we keep it
-                            if (dst <= rangeBlue) {
-                                defenderParticipatingUnits.add(unitRed);
-                                attackerParticipatingUnits.add(unitBlue);
-                                if (firstDefender == null) {
-                                    firstDefender = unitRed;
-                                }
-                            }
-                            else {
-                                //We still check if our unit is threatened by unitRed
-                                const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
-                                if (dst <= rangeRed) {
+                            if (unitRed !== null && unitRed !== undefined && unitRed.health > 0) {
+                                const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
+                                //Unit B is in range, we keep it
+                                if (dst <= rangeBlue) {
                                     defenderParticipatingUnits.add(unitRed);
                                     attackerParticipatingUnits.add(unitBlue);
                                     if (firstDefender == null) {
                                         firstDefender = unitRed;
+                                    }
+                                }
+                                else {
+                                    //We still check if our unit is threatened by unitRed
+                                    const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
+                                    if (dst <= rangeRed) {
+                                        defenderParticipatingUnits.add(unitRed);
+                                        attackerParticipatingUnits.add(unitBlue);
+                                        if (firstDefender == null) {
+                                            firstDefender = unitRed;
+                                        }
                                     }
                                 }
                             }
@@ -2081,7 +2085,8 @@ function gameLoop(currentTime) {
                         newDefenders.forEach(unitRed => {
                             const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
                             lesBleus.forEach(unitBlue => {
-                                if (!attackerParticipatingUnits.has(unitBlue)) {
+                                const unitStillExistsAndAlive = (unitBlue !== null && unitBlue !== undefined && unitBlue.health > 0);
+                                if (unitStillExistsAndAlive && !attackerParticipatingUnits.has(unitBlue)) {
                                     const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
                                     //The unit is in range, we keep it
                                     if (dst <= rangeRed) {
@@ -2098,7 +2103,8 @@ function gameLoop(currentTime) {
                             newAttackers.forEach(unitBlue => {
                                 const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
                                 lesRouges.forEach(unitRed => {
-                                    if (!defenderParticipatingUnits.has(unitRed)) {
+                                    const unitStillExistsAndAlive = (unitRed !== null && unitRed !== undefined && unitRed.health > 0);
+                                    if (unitStillExistsAndAlive && !defenderParticipatingUnits.has(unitRed)) {
                                         const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
                                         //The unit is in range, we keep it
                                         if (dst <= rangeBlue) {
