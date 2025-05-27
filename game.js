@@ -17,6 +17,7 @@ let map; // Variable to hold the generated map array (Populated by mapGeneration
 let currentMapRows; // Dynamic map height (Set by mapGeneration.js)
 let currentMapCols; // Dynamic map width (Set by mapGeneration.js)
 let currentUnits = []; // Array to hold the currently placed units (Populated by unitManagement.js)
+let unitOnId = new Map();
 
 let audioContext;
 let trumpetBuffer;
@@ -95,6 +96,10 @@ const originalConsoleError = console.error;
 // *** NEW : Variable to track game state (finished or not) ***
 let gameOver = false; // Flag to indicate if the game has ended
 // *** END NEW ***
+
+// *** NEW : Synchronization sequence number ***
+let syncSequenceNumber = 0; // For Blue player: Incremented for each STATE_SYNC sent
+let lastReceivedSyncSequenceNumber = -1; // For Red player: Tracks the last processed sequence number
 
 
 // ============================================================================
@@ -263,6 +268,7 @@ function connectToServer() {
                 // Clear game state? Or leave it as is? Clearing might be cleaner.
                 map = null;
                 currentUnits = [];
+                unitOnId.clear();
                 currentMapRows = 0;
                 currentMapCols = 0;
                 selectedUnit = null;
@@ -302,6 +308,7 @@ function connectToServer() {
         }
         playerArmyColor = null; // Reset player color
         map = null; currentUnits = []; currentMapRows = 0; currentMapCols = 0; selectedUnit = null; combatHexes.clear(); visibleHexes = [];
+        unitOnId.clear();
         drawMapAndUnits(ctx, null, [], HEX_SIZE, TerrainColors); // Draw empty screen
         gameOver = false; // Reset game over flag
         messageEndGame = null;
@@ -319,6 +326,7 @@ function connectToServer() {
         }
         playerArmyColor = null; // Reset player color
         map = null; currentUnits = []; currentMapRows = 0; currentMapCols = 0; selectedUnit = null; combatHexes.clear(); visibleHexes = [];
+        unitOnId.clear();
         drawMapAndUnits(ctx, null, [], HEX_SIZE, TerrainColors); // Draw empty screen
         gameOver = false; // Reset game over flag
         messageEndGame = null;
@@ -333,14 +341,14 @@ function connectToServer() {
  */
 function handleReceivedMoveOrder(data) {
     // Find the unit by ID
-    const unitToMove = currentUnits.find(unit => unit && unit.id === data.unitId);
+    //const unitToMove = currentUnits.find(unit => unit && unit.id === data.unitId);
+    const unitToMove = unitOnId.get(data.unitId);
 
     if (unitToMove) {
         // A client should only process MOVE_ORDER messages for the *enemy* army.
         // Blue client processes MOVE_ORDER for Red units.
         // Red client processes MOVE_ORDER for Blue units.
-        const isEnemyUnit = (playerArmyColor === ARMY_COLOR_BLUE && unitToMove.armyColor === ARMY_COLOR_RED) ||
-            (playerArmyColor === ARMY_COLOR_RED && unitToMove.armyColor === ARMY_COLOR_BLUE);
+        const isEnemyUnit = (playerArmyColor !== unitToMove.armyColor);
 
         if (isEnemyUnit) {
             originalConsoleLog(`[handleReceivedMoveOrder] Client ${playerArmyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} received MOVE_ORDER for enemy unit ID ${data.unitId} (${unitToMove.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}) to (${data.targetR}, ${data.targetC}). Applying locally.`);
@@ -399,6 +407,8 @@ function handleReceivedCombatResult(data) {
     if (data.eliminatedUnitIds && Array.isArray(data.eliminatedUnitIds)) {
         const eliminatedSet = new Set(data.eliminatedUnitIds);
         const unitsBefore = currentUnits.length;
+        unitOnId.clear();
+
         currentUnits = currentUnits.filter(unit => {
             if (unit && eliminatedSet.has(unit.id)) {
                 originalConsoleLog(`[handleReceivedCombatResult] Eliminating unit ID ${unit.id} (${getUnitTypeName(unit.type)}) from local state (via network sync).`);
@@ -406,6 +416,7 @@ function handleReceivedCombatResult(data) {
                 // No need to reset target/progress/previous, the unit is removed
                 return false; // Remove the unit
             }
+            unitOnId.set(unit.id, unit);
             return unit !== null && unit !== undefined;
         });
         if (unitsBefore !== currentUnits.length) {
@@ -427,32 +438,35 @@ function handleReceivedCombatResult(data) {
 function handleReceivedStateSync(data) {
     // This message is only processed by the Red client
     if (playerArmyColor !== ARMY_COLOR_RED) {
-        // originalConsoleLog("[handleReceivedStateSync] Received STATE_SYNC but client is Blue. Ignoring."); // Too chatty
         return;
     }
 
-    // originalConsoleLog("[handleReceivedStateSync] Received STATE_SYNC update."); // Too chatty
+    // *** NEW: Check sequence number ***
+    const receivedSequenceNumber = data.state.sequenceNumber;
+    if (receivedSequenceNumber <= lastReceivedSyncSequenceNumber) {
+        originalConsoleLog(`[handleReceivedStateSync] Red: Ignoring STATE_SYNC with sequence number ${receivedSequenceNumber} (last processed: ${lastReceivedSyncSequenceNumber}). Out of order or duplicate.`);
+        return;
+    }
+    // Update the last received sequence number
+    lastReceivedSyncSequenceNumber = receivedSequenceNumber;
+    originalConsoleLog(`[handleReceivedStateSync] Red: Processing STATE_SYNC with sequence number ${receivedSequenceNumber}.`);
+    // *** END NEW ***
 
     const receivedState = data.state;
 
     // Update game time based on Blue's clock
     gameTimeInMinutes = receivedState.gameTimeInMinutes;
-    // Note: lastRealTime does *not* need to be synced, it's just for local time progression calculation
 
-    // *** NEW : Update map data and dimensions ***
-    // Check if map data is included and seems valid before updating
+    // Update map data and dimensions
     if (receivedState.map && Array.isArray(receivedState.map) && receivedState.map.length > 0) {
         map = receivedState.map;
         currentMapRows = receivedState.currentMapRows !== undefined ? receivedState.currentMapRows : map.length;
         currentMapCols = receivedState.currentMapCols !== undefined ? receivedState.currentMapCols : (map[0] ? map[0].length : 0);
-        // originalConsoleLog(`[handleReceivedStateSync] Red: Map data updated. Dimensions: ${currentMapRows}x${currentMapCols}.`); // Too chatty
 
-
-        // Adjust canvas size based on synced map dimensions (important if Blue generated a different size)
+        // Adjust canvas size based on synced map dimensions
         if (canvas && ctx) {
             const canvasWidth = (currentMapCols + currentMapCols/6) * HEX_SIZE * 1.5 + HEX_SIZE * 0.5;
             const canvasHeight = (currentMapRows + currentMapRows/7) * HEX_SIZE * Math.sqrt(3) * 0.75 + HEX_SIZE * Math.sqrt(3) * 0.25 + CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2 + 20;
-            // Only resize if dimensions actually changed significantly to avoid unnecessary redraws
             if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
                 canvas.width = canvasWidth;
                 canvas.height = canvasHeight;
@@ -467,55 +481,38 @@ function handleReceivedStateSync(data) {
         } else {
             originalConsoleWarn("[handleReceivedStateSync] Red: Canvas or context not available for resizing during state sync.");
         }
-
-
     } else {
-        // This might happen if the map wasn't included or is invalid.
-        // Log a warning, but don't clear the existing map if there is one.
         originalConsoleWarn("[handleReceivedStateSync] Red: Received STATE_SYNC with no map data or invalid map data.");
     }
-    // *** END NEW ***
-
 
     // Update unit states based on Blue's snapshot
     if (receivedState.units && Array.isArray(receivedState.units)) {
-        // Create a map of received units for easy lookup
         const receivedUnitsMap = new Map(receivedState.units.map(unit => [unit.id, unit]));
-
-        // --- Update existing units and add new units from received state ---
         const updatedUnitsList = [];
-        // Keep track of local unit IDs to identify those that were eliminated on Blue's side
         const localUnitIdsBeforeSync = new Set(currentUnits.map(unit => unit.id));
 
         receivedState.units.forEach(syncedUnitData => {
-            const localUnit = currentUnits.find(unit => unit && unit.id === syncedUnitData.id);
+            //const localUnit = currentUnits.find(unit => unit && unit.id === syncedUnitData.id);
+            const localUnit = unitOnId.get(syncedUnitData.id);
 
             if (localUnit) {
-                // Update the dynamic properties of the local unit to match Blue's state
                 localUnit.row = syncedUnitData.row;
                 localUnit.col = syncedUnitData.col;
                 localUnit.health = syncedUnitData.health;
-                // *** IMPORTANT FIX: Apply target and movement progress from sync ***
                 localUnit.targetRow = syncedUnitData.targetRow;
                 localUnit.targetCol = syncedUnitData.targetCol;
                 localUnit.movementProgress = syncedUnitData.movementProgress;
-                // *** END IMPORTANT FIX ***
-                // Ensure static properties like type and armyColor are also consistent (should be, but safety)
                 localUnit.type = syncedUnitData.type;
                 localUnit.armyColor = syncedUnitData.armyColor;
                 localUnit.previousRow = syncedUnitData.previousRow;
                 localUnit.previousCol = syncedUnitData.previousCol;
-                updatedUnitsList.push(localUnit); // Add updated unit to the new list
-                localUnitIdsBeforeSync.delete(localUnit.id); // Remove this unit ID from the set of units that were local
-
+                updatedUnitsList.push(localUnit);
+                localUnitIdsBeforeSync.delete(localUnit.id);
             } else {
-                // This is a new unit on Blue's side that Red didn't know about (shouldn't happen in this game unless a dev feature adds units).
-                // Or more likely, a unit was eliminated on Red's side by mistake and Blue revived it (unlikely in this game).
-                // Create a new unit object on Red's side if it's in the sync but not locally.
                 originalConsoleLog(`[handleReceivedStateSync] Red: Adding unit ID ${syncedUnitData.id} from sync (not found locally).`);
                 updatedUnitsList.push({
                     id: syncedUnitData.id,
-                    type: syncedUnitData.type, // Ensure type and armyColor are sent in sync
+                    type: syncedUnitData.type,
                     armyColor: syncedUnitData.armyColor,
                     row: syncedUnitData.row,
                     col: syncedUnitData.col,
@@ -526,73 +523,30 @@ function handleReceivedStateSync(data) {
                     previousRow: syncedUnitData.previousRow,
                     previousCol: syncedUnitData.previousCol
                 });
-                // This new unit wasn't in localUnitIdsBeforeSync, so it won't be mistakenly filtered out below.
             }
         });
 
-        // --- Handle units missing from the received state (eliminated on Blue's side) ---
-        // Filter out local units whose IDs are NOT in the receivedUnitsMap.
-        // This is the primary way Red eliminates units based on Blue's state.
-        const unitsBeforeFilter = currentUnits.length;
-        currentUnits = updatedUnitsList.filter(unit => unit && receivedUnitsMap.has(unit.id));
-
-        // Log which units were removed because they were no longer in the sync list
-        localUnitIdsBeforeSync.forEach(unitId => {
-            // This unit ID was in the local list before sync but is not in the received list.
-            // This means Blue eliminated it. Log this event.
-            const eliminatedUnit = currentUnits.find(unit => unit && unit.id === unitId); // Search updated list (shouldn't be there) or original list?
-            const originalUnit = currentUnits.find(unit => unit && unit.id === unitId); // Check if it was actually removed
-
-            // This check is a bit tricky. A unit might be in updatedUnitsList if it was a *new* unit added.
-            // The simpler check is: compare the *set* of IDs in receivedState.units vs the set of IDs in currentUnits *before* this sync.
-            // The filter approach above correctly removes units whose IDs aren't in the received map.
-            // Let's just log the total count difference and trust the filter.
-            // Logging individual eliminations from sync might be too chatty and less precise than combat results.
-        });
-
-
-        if (unitsBeforeFilter !== currentUnits.length) {
-            originalConsoleLog(`[handleReceivedStateSync] Red: Eliminated ${unitsBeforeFilter - currentUnits.length} units based on STATE_SYNC (missing from sync). Total remaining: ${currentUnits.length}.`);
-            // Note: This elimination via missing sync is a fallback/consistency mechanism. Primary elimination should come from COMBAT_RESULT.
-        }
-        // --- END Unit Sync ---
-
-
-        // *** NEW : Synchronize combat hexes ***
-        // Blue should include the list of hexes in combat in the STATE_SYNC message.
-        // If the STATE_SYNC message includes a list of combat hexes (e.g., data.state.combatHexes)
+        unitOnId.clear();
+        currentUnits = updatedUnitsList.filter(unit => unit && receivedUnitsMap.has(unit.id) && unitOnId.set(unit.id, unit));
+        
+        // Synchronize combat hexes
         if (receivedState.combatHexes && Array.isArray(receivedState.combatHexes)) {
-            combatHexes.clear(); // Clear current combat hexes on Red
+            combatHexes.clear();
             receivedState.combatHexes.forEach(hexKey => {
-                combatHexes.add(hexKey); // Add hexes from the synced list
+                combatHexes.add(hexKey);
             });
-            // originalConsoleLog(`[handleReceivedStateSync] Red: Synced combat hexes. Total: ${combatHexes.size}`); // Too chatty
         } else {
-            // If no combat hexes info is sent, clear local combat hexes on Red.
-            // This ensures highlights disappear after a combat interval passes on Blue.
             if (combatHexes.size > 0) {
                 combatHexes.clear();
-                // originalConsoleLog("[handleReceivedStateSync] Red: No combat hexes in sync data. Cleared local combat highlights."); // Too chatty
             }
         }
-        // *** END NEW ***
-
-
     } else {
-        // If receivedState.units is not an array or empty, this might mean no units are left,
-        // or an error. Be cautious about clearing all units based on an empty sync.
-        // Maybe log a warning or ignore if no units were expected.
         originalConsoleWarn("[handleReceivedStateSync] Red: Received STATE_SYNC with no unit data or invalid unit data.");
-        // If unit data is missing, maybe clear units? Be careful: currentUnits = [];
-        // It might be better to keep existing units and log a warning if unit data is missing.
     }
 
-
-    // Visibility needs to be updated after applying state changes as unit positions changed
+    // Update visibility after applying state changes
     updateVisibility();
-    // The redraw happens in the gameLoop, which is running.
 }
-
 
 /**
  * Starts the periodic state synchronization interval.
@@ -626,12 +580,9 @@ function startSyncInterval() {
         }
         const stateSnapshot = {
             gameTimeInMinutes: gameTimeInMinutes,
-            // *** NEW : Include map and dimensions in sync ***
             map: map, // Include map data
             currentMapRows: currentMapRows, // Include map dimensions
             currentMapCols: currentMapCols, // Include map dimensions
-            // *** END NEW ***
-            // Send only dynamic properties of units (and essential static ones for reliable updates on Red)
             units: currentUnits.map(unit => ({
                 id: unit.id,
                 type: unit.type, // Include unit type
@@ -639,17 +590,14 @@ function startSyncInterval() {
                 row: unit.row,
                 col: unit.col,
                 health: unit.health,
-                // *** IMPORTANT: Include target and movement progress in sync ***
                 targetRow: unit.targetRow,
                 targetCol: unit.targetCol,
                 movementProgress: unit.movementProgress,
-                // *** END IMPORTANT ***
-                previousRow: unit.previousRow, // Include previous position
+                previousRow: unit.previousRow,
                 previousCol: unit.previousCol
             })),
-            // *** NEW : Include combat hexes for highlighting on Red ***
-            combatHexes: Array.from(combatHexes) // Send the set of combat hex keys
-            // *** END NEW ***
+            combatHexes: Array.from(combatHexes), // Send the set of combat hex keys
+            sequenceNumber: syncSequenceNumber // *** NEW: Include the sequence number ***
         };
 
         // Send the state via WebSocket if connected
@@ -658,9 +606,10 @@ function startSyncInterval() {
                 type: 'STATE_SYNC',
                 state: stateSnapshot
             }));
-            // originalConsoleLog("[startSyncInterval] Sent STATE_SYNC message."); // Too chatty
+            syncSequenceNumber++; // *** NEW: Increment sequence number after sending ***
+            originalConsoleLog(`[startSyncInterval] Sent STATE_SYNC message with sequence number ${syncSequenceNumber - 1}.`);
         } else {
-            // originalConsoleWarn("[startSyncInterval] WebSocket not open, cannot send STATE_SYNC."); // Too chatty
+            originalConsoleWarn("[startSyncInterval] WebSocket not open, cannot send STATE_SYNC.");
         }
 
     }, SYNC_INTERVAL_MS); // Use the constant
@@ -1329,6 +1278,9 @@ function updateDimensionsAndDraw() {
 
 
     currentUnits = createInitialUnits(map, currentMapRows, currentMapCols, unitCounts); // Uses unitManagement function
+    unitOnId.clear();
+    currentUnits.forEach(unit => {unitOnId.set(unit.id, unit);});
+
     originalConsoleLog(`[updateDimensionsAndDraw] Initial units created. Total: ${currentUnits.length}`);
 
 
@@ -1929,7 +1881,7 @@ function moveUnitStep(unit) {
 
         // Si l'unité est arrivée à destination après ce pas
         if (unit.row === targetR && unit.col === targetC) {
-            console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army has arrived at destination (${unit.row}, ${unit.col}).`);
+            console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army has arrived at destination (${unit.row}, ${unit.col}).`);
             originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} arrived at final destination (${unit.row}, ${unit.col}) after step.`);
             movedHexUnit.delete(unit);
             unit.targetRow = null;
@@ -1951,7 +1903,7 @@ function moveUnitStep(unit) {
         //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} moved to (${unit.row}, ${unit.col}). Next step in ${realTimeForNextStep.toFixed(0)} ms.`);
     } else {
         // Fallback si aucun meilleur hexagone n'est trouvé (ne devrait pas arriver si viableNeighbors n'est pas vide)
-        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}) - fallback block.`);
+        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}) - fallback block.`);
         originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). Fallback block.`);
         movedHexUnit.delete(unit);
         unit.targetRow = null;
@@ -2347,7 +2299,8 @@ function gameLoop(currentTime) {
                     // Filter the main currentUnits list to remove units that now have health <= 0
                     // This happens AFTER checking for General elimination within this instance
                     const unitsBeforeFilter = currentUnits.length;
-                    currentUnits = currentUnits.filter(unit => unit && unit.health > 0);
+                    unitOnId.clear();
+                    currentUnits = currentUnits.filter(unit => unit && unit.health > 0 && unitOnId.set(unit.id, unit));
 
                     if (unitsBeforeFilter !== currentUnits.length) {
                         originalConsoleLog(`[gameLoop] Eliminated ${unitsBeforeFilter - currentUnits.length} units locally after combat instance. Total remaining: ${currentUnits.length}.`);
@@ -2380,7 +2333,7 @@ function gameLoop(currentTime) {
 
     // *** Final HP Recovery Phase by Supply (End of Tick) ***
     // This runs on BOTH clients, but only if game is NOT over
-    if (!gameOver) {
+    if (!gameOver && playerArmyColor === ARMY_COLOR_BLUE) {
         const unitsForSupplyCheck = currentUnits.filter(unit => unit !== null && unit !== undefined && unit.health > 0);
 
         unitsForSupplyCheck.forEach(unit => {
@@ -2447,6 +2400,8 @@ function loadGameStateFromJson(state) {
     currentMapRows = state.currentMapRows; // Map height
     currentMapCols = state.currentMapCols; // Map width
     currentUnits = state.currentUnits; // The list of units
+    unitOnId.clear();
+    currentUnits.forEach(unit => {unitOnId.set(unit.id, unit);});
 
     // Ensure loaded units have necessary properties for movement/sync
     if (currentUnits) {
@@ -3242,6 +3197,8 @@ function handleFileSelect(event) {
         currentMapRows = gameState.currentMapRows;
         currentMapCols = gameState.currentMapCols; // Assuming this matches the save structure
         currentUnits = gameState.currentUnits; // Units should have IDs from save
+        unitOnId.clear();
+        currentUnits.forEach(unit => {unitOnId.set(unit.id, unit);});
 
         // Ensure units loaded from save have necessary properties for movement/sync
         if (currentUnits) {

@@ -242,7 +242,7 @@ const COMBAT_HIGHLIGHT_COLOR = 'rgba(255, 0, 0, 0.5)'; // Red semi-transparent
 const GENERAL_HEX_COLOR = 'rgba(0, 0, 255, 0.5)';
 
 // *** Synchronization Interval ***
-let SYNC_INTERVAL_MS = 1500; // Sync state every 200 real-world milliseconds
+let SYNC_INTERVAL_MS = 200; // Sync state every 200 real-world milliseconds
 
 const STARTING_AREA_PERCENT = 0.1;
 
