@@ -18,6 +18,7 @@ let currentMapRows; // Dynamic map height (Set by mapGeneration.js)
 let currentMapCols; // Dynamic map width (Set by mapGeneration.js)
 let currentUnits = []; // Array to hold the currently placed units (Populated by unitManagement.js)
 let unitOnId = new Map();
+let firstDraw = true;
 
 let audioContext;
 let trumpetBuffer;
@@ -1019,7 +1020,10 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
         ctx.fillRect(x, y, width, height);
     }
 
-
+    if (firstDraw && playerArmyColor == ARMY_COLOR_RED) {
+        firstDraw = false;
+        window.scrollTo(0, document.body.scrollHeight);
+    }
     // Draw the game clock (always visible)
     //drawClock(ctx, gameTimeInMinutes); // Use global gameTimeInMinutes, drawing function
 }
