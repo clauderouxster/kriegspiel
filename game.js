@@ -2774,40 +2774,28 @@ function handleCanvasClick(event) {
                                 indexCol++;
 
                             // Check validity of the individual target hex
-                            const isTargetValidLocation = isValid(targetR, targetC, currentMapRows, currentMapCols);
-                            const targetTerrain = isTargetValidLocation ? map[targetR][targetC] : null;
-                            const movementCost = isTargetValidLocation ? getMovementCost(targetTerrain, unit.type) : Infinity;
+                            //const isTargetValidLocation = isValid(targetR, targetC, currentMapRows, currentMapCols);
+                            //const targetTerrain = isTargetValidLocation ? map[targetR][targetC] : null;
+                            //const movementCost = isTargetValidLocation ? getMovementCost(targetTerrain, unit.type) : Infinity;
                             // Check if the target hex is occupied by *any* unit (excluding the current unit itself)
-                            const isOccupiedByAnyUnit = isTargetValidLocation ? getUnitAt(targetR, targetC, livingUnits.filter(u => u.id !== unit.id), `handleCanvasClick - target occupied check for unit ${unit.id}`) !== null : true; // Exclude the unit itself from the check
+                            //const isOccupiedByAnyUnit = isTargetValidLocation ? getUnitAt(targetR, targetC, livingUnits.filter(u => u.id !== unit.id), `handleCanvasClick - target occupied check for unit ${unit.id}`) !== null : true; // Exclude the unit itself from the check
 
-                            if (!isTargetValidLocation || movementCost === Infinity || isOccupiedByAnyUnit) {
-                                // Target hex is invalid for this unit
-                                console.warn(`Destination hex (${targetR}, ${targetC}) is invalid for unit ${getUnitTypeName(unit.type)} ID ${unit.id}. Movement cancelled.`);
-                                originalConsoleWarn(`[handleCanvasClick] Target hex (${targetR}, ${targetC}) is invalid (out of bounds, impassable, or occupied) for unit ID ${unit.id}. Movement cancelled.`);
+                            // Valid target hex - Set the target for this unit (locally)
+                            originalConsoleLog(`[handleCanvasClick] Setting target for unit ID ${unit.id} to (${targetR}, ${targetC}).`);
+                            unit.targetRow = targetR;
+                            unit.targetCol = targetC;
+                            unitsSuccessfullyOrdered.push(unit); // Add to list of units that got an order
 
-                                // Stop the unit locally (it won't get a new target)
-                                unit.targetRow = null;
-                                unit.targetCol = null;
-                                unit.movementProgress = 0;
-
-                            } else {
-                                // Valid target hex - Set the target for this unit (locally)
-                                originalConsoleLog(`[handleCanvasClick] Setting target for unit ID ${unit.id} to (${targetR}, ${targetC}).`);
-                                unit.targetRow = targetR;
-                                unit.targetCol = targetC;
-                                unitsSuccessfullyOrdered.push(unit); // Add to list of units that got an order
-
-                                // *** Send a MOVE_ORDER message to the server (only in multiplayer) ***
-                                if (ws && ws.readyState === WebSocket.OPEN) {
-                                    const moveOrder = {
-                                        type: 'MOVE_ORDER',
-                                        unitId: unit.id,
-                                        targetR: targetR,
-                                        targetC: targetC
-                                    };
-                                    ws.send(JSON.stringify(moveOrder));
-                                    originalConsoleLog(`[handleCanvasClick] Sent MOVE_ORDER for unit ID ${unit.id} to (${targetR}, ${targetC}).`);
-                                }
+                            // *** Send a MOVE_ORDER message to the server (only in multiplayer) ***
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                const moveOrder = {
+                                    type: 'MOVE_ORDER',
+                                    unitId: unit.id,
+                                    targetR: targetR,
+                                    targetC: targetC
+                                };
+                                ws.send(JSON.stringify(moveOrder));
+                                originalConsoleLog(`[handleCanvasClick] Sent MOVE_ORDER for unit ID ${unit.id} to (${targetR}, ${targetC}).`);
                             }
                         });
 
