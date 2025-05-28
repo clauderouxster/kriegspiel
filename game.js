@@ -348,22 +348,14 @@ function handleReceivedMoveOrder(data) {
         // A client should only process MOVE_ORDER messages for the *enemy* army.
         // Blue client processes MOVE_ORDER for Red units.
         // Red client processes MOVE_ORDER for Blue units.
-        const isEnemyUnit = (playerArmyColor !== unitToMove.armyColor);
-
-        if (isEnemyUnit) {
-            originalConsoleLog(`[handleReceivedMoveOrder] Client ${playerArmyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} received MOVE_ORDER for enemy unit ID ${data.unitId} (${unitToMove.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}) to (${data.targetR}, ${data.targetC}). Applying locally.`);
-            // Update the unit's target and reset movement progress to start new pathfinding locally
-            unitToMove.targetRow = data.targetR;
-            unitToMove.targetCol = data.targetC;
-            unitToMove.movementProgress = 0; // Reset progress for the new move
-            unitToMove.previousRow = unitToMove.row; // Update previous
-            unitToMove.previousCol = unitToMove.col;
-            // The gameLoop's movement processing will pick up this new target.
-            // Visibility will be updated in gameLoop or on next sync.
-        } else {
-            // Received a move order for own unit (shouldn't happen with new click logic)
-            originalConsoleLog(`[handleReceivedMoveOrder] Received MOVE_ORDER for unit ID ${data.unitId} (own army or unexpected). Ignoring.`);
-        }
+        // Update the unit's target and reset movement progress to start new pathfinding locally
+        unitToMove.targetRow = data.targetR;
+        unitToMove.targetCol = data.targetC;
+        unitToMove.movementProgress = 0; // Reset progress for the new move
+        unitToMove.previousRow = unitToMove.row; // Update previous
+        unitToMove.previousCol = unitToMove.col;
+        // The gameLoop's movement processing will pick up this new target.
+        // Visibility will be updated in gameLoop or on next sync.
     } else {
         originalConsoleWarn(`[handleReceivedMoveOrder] Received MOVE_ORDER for unknown unit ID ${data.unitId}.`);
     }
@@ -1971,31 +1963,35 @@ function gameLoop(currentTime) {
     const gameMinutesToAdd = (realTimeElapsed / MILLISECONDS_PER_GAME_MINUTE);
     gameTimeInMinutes += gameMinutesToAdd;
 
-    // --- Unit Movement Processing (Event-driven via Timers) ---
-    // Cette partie est responsable de DÉMARRER le mouvement des unités
-    // qui ont une cible et n'ont pas encore de timer actif.
-    // Le mouvement pas-par-pas est géré par la fonction moveUnitStep et ses timers.
-    const unitsEligibleForMovementStart = currentUnits.filter(unit =>
-        unit !== null && unit !== undefined && unit.health > 0 && // Unité vivante
-        unit.targetRow !== null && unit.targetCol !== null && // A une cible
-        !(unit.row === unit.targetRow && unit.col === unit.targetCol) && // N'est pas déjà à la cible
-        !unitMovementTimers.has(unit.id) // N'a pas de timer de mouvement déjà actif
-    );
-
-    unitsEligibleForMovementStart.forEach(unit => {
-        // Démarrer le premier pas pour cette unité.
-        // La fonction moveUnitStep s'occupera d'enchaîner les pas suivants.
-        // On l'appelle directement une première fois pour initier le processus.
-        originalConsoleLog(`[gameLoop] Initiating movement for Unit ID ${unit.id} towards (${unit.targetRow}, ${unit.targetCol}).`);
-        moveUnitStep(unit);
-    });
-
-    // --- Combat Time Tracking and Resolution ---
-    // This section runs ONLY on the Blue client, as it is the combat authority.
-    // Only process combat if the game is NOT over
-    
+    // Red client does NOT perform combat detection or resolution here nor movement detection
+    // It only executes unit movement based on received orders/syncs and handles local supply healing.
+    // Combat results and eliminations are applied when receiving 'COMBAT_RESULT' messages.
+    // Red relies on Blue's sync to know about combat hexes. combatHexes is updated in handleReceivedStateSync.
+    // No need to clear combatHexes here on Red.
 
     if (!gameOver && playerArmyColor === ARMY_COLOR_BLUE) {
+        // --- Unit Movement Processing (Event-driven via Timers) ---
+        // Cette partie est responsable de DÉMARRER le mouvement des unités
+        // qui ont une cible et n'ont pas encore de timer actif.
+        // Le mouvement pas-par-pas est géré par la fonction moveUnitStep et ses timers.
+        const unitsEligibleForMovementStart = currentUnits.filter(unit =>
+            unit !== null && unit !== undefined && unit.health > 0 && // Unité vivante
+            unit.targetRow !== null && unit.targetCol !== null && // A une cible
+            !(unit.row === unit.targetRow && unit.col === unit.targetCol) && // N'est pas déjà à la cible
+            !unitMovementTimers.has(unit.id) // N'a pas de timer de mouvement déjà actif
+        );
+
+        unitsEligibleForMovementStart.forEach(unit => {
+            // Démarrer le premier pas pour cette unité.
+            // La fonction moveUnitStep s'occupera d'enchaîner les pas suivants.
+            // On l'appelle directement une première fois pour initier le processus.
+            originalConsoleLog(`[gameLoop] Initiating movement for Unit ID ${unit.id} towards (${unit.targetRow}, ${unit.targetCol}).`);
+            moveUnitStep(unit);
+        });
+
+        // --- Combat Time Tracking and Resolution ---
+        // This section runs ONLY on the Blue client, as it is the combat authority.
+        // Only process combat if the game is NOT over
         if (gameTimeInMinutes >= lastCombatGameTimeInMinutes + COMBAT_INTERVAL_GAME_MINUTES) {
             originalConsoleLog(`[gameLoop] ${COMBAT_INTERVAL_GAME_MINUTES} game minutes elapsed. Initiating combat checks (Blue Client).`);
             // Clear previous combat highlights at the start of a new combat interval
@@ -2312,25 +2308,9 @@ function gameLoop(currentTime) {
             }
             if (oneCombat == false)
                 allUnitInvolvedCombat.clear();
-        } //else if (!gameOver) { // Not in a combat interval AND game not over
-            // Not in a combat interval, ensure combat highlights are cleared on Blue's side
-            //if (combatHexes.size > 0) {
-            //    combatHexes.clear();
-                // originalConsoleLog("[gameLoop] Cleared combat highlights (not in combat interval).");
-            //}
-        //}
+        }
 
-    }
-    // Red client does NOT perform combat detection or resolution here.
-    // It only executes unit movement based on received orders/syncs and handles local supply healing.
-    // Combat results and eliminations are applied when receiving 'COMBAT_RESULT' messages.
-    // Red relies on Blue's sync to know about combat hexes. combatHexes is updated in handleReceivedStateSync.
-    // No need to clear combatHexes here on Red.
-
-
-    // *** Final HP Recovery Phase by Supply (End of Tick) ***
-    // This runs on BOTH clients, but only if game is NOT over
-    if (!gameOver && playerArmyColor === ARMY_COLOR_BLUE) {
+        // *** Final HP Recovery Phase by Supply (End of Tick) ***
         const unitsForSupplyCheck = currentUnits.filter(unit => unit !== null && unit !== undefined && unit.health > 0);
 
         unitsForSupplyCheck.forEach(unit => {
