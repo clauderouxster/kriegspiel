@@ -2759,6 +2759,32 @@ function handleCanvasClick(event) {
 
                         // Create a copy of the selectedUnits array to iterate, as we might modify the original
                         const unitsToOrder = [...selectedUnits];
+                        unitsToOrder.sort((a, b) => {
+                            // Calculate Manhattan Distance for unit 'a'
+                            const distA = Math.abs(a.row - baseTargetR) + Math.abs(a.col - baseTargetC);
+
+                            // Calculate Manhattan Distance for unit 'b'
+                            const distB = Math.abs(b.row - baseTargetR) + Math.abs(b.col - baseTargetC);
+
+                            // Sort in ascending order of distance (closer units first)
+                            if (distA !== distB) {
+                                return distA - distB;
+                            }
+
+                            // If distances are equal, you might want a secondary sorting criterion.
+                            // For example, if you want units with higher 'col' then higher 'row'
+                            // among equally distant units (similar to your initial request),
+                            // you can add those rules here.
+                            // Otherwise, their relative order remains stable as per JavaScript's sort() behavior.
+
+                            // Example secondary sorting for ties (optional):
+                            // If distances are equal, sort by col (descending), then by row (descending)
+                            if (b.col !== a.col) {
+                                return b.col - a.col;
+                            }
+                            return b.row - a.row;
+                        });
+
                         const unitsSuccessfullyOrdered = [];
                         let indexRow = 0;
                         let indexCol = 0; 
@@ -2767,8 +2793,8 @@ function handleCanvasClick(event) {
                             const targetR = baseTargetR + indexRow;
                             const targetC = baseTargetC + indexCol;
                             if (indexCol == 3) {
-                                indexCol = 0;
                                 indexRow++;
+                                indexCol = 0;                                
                             }
                             else
                                 indexCol++;
