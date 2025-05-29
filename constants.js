@@ -92,6 +92,7 @@ const CLOCK_HEIGHT = CLOCK_MARGIN_TOP + CLOCK_RADIUS * 2; // Total vertical spac
 const MILLISECONDS_PER_GAME_MINUTE = 50; // 50 real ms = 1 game minute (e.g., 1 sec real = 20 game min)
 const MILLISECONDS_PER_GAME_HOUR = MILLISECONDS_PER_GAME_MINUTE * 60;
 
+
 // Movement Costs per hex terrain type for each unit type
 // Infinity means impassable
 const TERRAIN_MOVEMENT_COSTS = {
@@ -197,9 +198,9 @@ const VISION_RANGES = {
 const MAX_RANGE = 4;
 // Combat Stats and Ranges per unit type
 const UNIT_COMBAT_STATS = {
-    [UnitType.ARTILLERY]: { attack: 20, defense: 20, range: { base: 3, hill_mountain: MAX_RANGE } }, // 4 cases sur colline/montagne, 3 partout ailleurs (pas de bonus montagne?) - Assuming Hill bonus applies only to hills as per prompt, adjusted to hill_mountain based on vision
-    [UnitType.INFANTERY]: { attack: 10, defense: 10, range: { base: 2, hill_mountain: 3 } }, // 3 cases sur colline ou montagne, 2 partout ailleurs
-    [UnitType.CAVALRY]: { attack: 15, defense: 10, range: { base: 1 } }, // 1 case partout (contact)
+    [UnitType.ARTILLERY]: { attack: 20, defense: 18, range: { base: 3, hill_mountain: MAX_RANGE } }, // 4 cases sur colline/montagne, 3 partout ailleurs (pas de bonus montagne?) - Assuming Hill bonus applies only to hills as per prompt, adjusted to hill_mountain based on vision
+    [UnitType.INFANTERY]: { attack: 10, defense: 9, range: { base: 2, hill_mountain: 3 } }, // 3 cases sur colline ou montagne, 2 partout ailleurs
+    [UnitType.CAVALRY]: { attack: 15, defense: 14, range: { base: 1 } }, // 1 case partout (contact)
     [UnitType.SUPPLY]: { attack: 1, defense: 2, range: { base: 1 } }, // 1 case partout
     [UnitType.SPY]: { attack: 1, defense: 1, range: { base: 1 } }, // 1 case partout
     [UnitType.GENERAL]: { attack: 1, defense: 5, range: { base: 1 } } // Nouveau : Général - Attaque 1, Défense 5, Portée 2
@@ -222,7 +223,7 @@ const UNIT_HEALTH = {
 // Combat Damage Scaling Factor
 // Multiplier for the damage calculated in combat resolution
 const COMBAT_DAMAGE_SCALE = 0.1; // Example: winner's total attack/defense * 0.1 = damage dealt
-const COMBAT_RANDOMNESS_FACTOR = 0.1;
+const COMBAT_RANDOMNESS_FACTOR = 0.4;
 
 // Combat Resolution Interval (in game minutes)
 // How often the game loop checks for and resolves combat engagements

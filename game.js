@@ -1443,7 +1443,6 @@ function evaluateAttackDefense(attacker, defender) {
 
     return {totalStatAttacker, totalStatDefender, attackInBattle, defenseInBattle};
 }
-
 /**
  * Resolves a single combat instance based on aggregated attack and defense stats,
  * introducing randomness to the effective power of each side.
@@ -1463,21 +1462,20 @@ function resolveCombat(totalAttackerAttack, totalDefenderDefense) {
     let damage = 0;
     let targetSide = 'both'; // Default to both sides taking damage in a draw
 
-    // --- Introduce Randomness with Attacker Bias ---
+    // --- Introduce Randomness (Symmetric) ---
     const R = COMBAT_RANDOMNESS_FACTOR;
 
-    // Generate a base random factor between -R and +R centered around 0
-    const baseRandomFactor = () => (Math.random() - 0.5) * 2 * R;
+    // Generate independent random multipliers for attacker and defender.
+    // Each multiplier will be between (1 - R) and (1 + R), centered around 1.
+    // This removes the inherent bias towards the attacker.
+    const attackerRandomMultiplier = 1 + (Math.random() * 2 - 1) * R; // (Math.random() * 2 - 1) gives a value between -1 and 1
+    const defenderRandomMultiplier = 1 + (Math.random() * 2 - 1) * R;
 
-    // Apply a positive bias for the attacker and negative for the defender
-    const attackerRandomFactor = baseRandomFactor() + (R * 0.5);
-    const defenderRandomFactor = baseRandomFactor() - (R * 0.5);
-
-    // Calculate effective power after applying biased randomness
+    // Calculate effective power after applying randomness
     // Ensure power does not become negative
-    const effectiveAttackerPower = Math.max(0, totalAttackerAttack * (1 + attackerRandomFactor));
-    const effectiveDefenderPower = Math.max(0, totalDefenderDefense * (1 + defenderRandomFactor));
-    // --- End Randomness with Attacker Bias ---
+    const effectiveAttackerPower = Math.max(0, totalAttackerAttack * attackerRandomMultiplier);
+    const effectiveDefenderPower = Math.max(0, totalDefenderDefense * defenderRandomMultiplier);
+    // --- End Randomness (Symmetric) ---
 
     // --- Apply Diminishing Returns Formula ---
     // This formula gives smaller forces a better chance
@@ -1485,7 +1483,7 @@ function resolveCombat(totalAttackerAttack, totalDefenderDefense) {
     const applyDiminishingReturns = (value) => {
         // Square root is a good way to get diminishing returns
         // Could also use Math.pow(value, 0.7) or another exponent between 0 and 1
-        return Math.pow(value, 0.45);
+        return Math.pow(value, 0.7);
     };
 
     // Combat Power for comparison is now based on effective stats after randomness AND diminishing returns
@@ -1494,7 +1492,7 @@ function resolveCombat(totalAttackerAttack, totalDefenderDefense) {
     // --- End Diminishing Returns ---
 
     // Increase the threshold difference required for a decisive victory
-    const victoryThreshold = 1.15; // 10% minimum difference for a decisive victory
+    const victoryThreshold = 1.10; // 15% minimum difference for a decisive victory
 
     // Determine winner based on the adjusted combat powers
     if (attackerCombatPower > defenderCombatPower * victoryThreshold) {
@@ -1511,7 +1509,9 @@ function resolveCombat(totalAttackerAttack, totalDefenderDefense) {
     else {
         outcome = 'draw';
         // Damage in a draw - calculated as a fraction of total combined effective power
-        damage = (effectiveAttackerPower + effectiveDefenderPower) * COMBAT_DAMAGE_SCALE * 0.5;
+        // In a draw, both sides take damage, so the damage is split or applied to both.
+        // Here, it's a total damage value that would be applied to 'both' sides.
+        damage = (effectiveAttackerPower + effectiveDefenderPower) * COMBAT_DAMAGE_SCALE * 0.25; // Adjusted for draw to be less severe
         targetSide = 'both';
     }
 
@@ -1520,7 +1520,6 @@ function resolveCombat(totalAttackerAttack, totalDefenderDefense) {
 
     return { outcome, damage, targetSide };
 }
-
 
 /**
  * Distributes damage among a list of units. Reduces health.
@@ -2777,7 +2776,7 @@ function handleCanvasClick(event) {
                                     return 1; // 'b' vient avant 'a'
                                 }
                             }
-                            
+
                             // Calculate Manhattan Distance for unit 'a'
                             const distA = Math.abs(a.row - baseTargetR) + Math.abs(a.col - baseTargetC);
 
