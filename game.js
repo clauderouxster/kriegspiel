@@ -2761,13 +2761,23 @@ function handleCanvasClick(event) {
                         const unitsToOrder = [...selectedUnits];
                         unitsToOrder.sort((a, b) => {
                             // 1. Critère principal: Trier par 'type' (par ordre alphabétique par défaut)
-                            if (a.type < b.type) {
-                                return -1; // 'a' vient avant 'b'
+                            if (a.armyColor == ARMY_COLOR_BLUE) {
+                                if (a.type < b.type) {
+                                    return 1; // 'a' vient avant 'b'
+                                }
+                                if (a.type > b.type) {
+                                    return -1; // 'b' vient avant 'a'
+                                }
                             }
-                            if (a.type > b.type) {
-                                return 1; // 'b' vient avant 'a'
+                            else {
+                                if (a.type < b.type) {
+                                    return -1; // 'a' vient avant 'b'
+                                }
+                                if (a.type > b.type) {
+                                    return 1; // 'b' vient avant 'a'
+                                }
                             }
-
+                            
                             // Calculate Manhattan Distance for unit 'a'
                             const distA = Math.abs(a.row - baseTargetR) + Math.abs(a.col - baseTargetC);
 
