@@ -19,6 +19,9 @@ let currentMapCols; // Dynamic map width (Set by mapGeneration.js)
 let currentUnits = []; // Array to hold the currently placed units (Populated by unitManagement.js)
 let unitOnId = new Map();
 let firstDraw = true;
+// Ajoutez cette variable globale en haut de votre script, près de unitMovementTimers
+const combatTimers = new Map(); // Stocke les timers pour les engagements de combat en cours
+
 
 let audioContext;
 let trumpetBuffer;
@@ -1914,6 +1917,195 @@ function moveUnitStep(unit) {
 }
 
 /**
+ * Résout une seule étape/tick d'un engagement de combat entre deux groupes d'unités.
+ * Cette fonction est appelée par un timer et se reprogrammera si le combat continue.
+ * @param {string} combatId - Un identifiant unique pour cet engagement de combat spécifique.
+ * @param {Array<object>} initialAttackerUnits - La liste initiale des unités considérées comme attaquantes pour cet engagement.
+ * @param {Array<object>} initialDefenderUnits - La liste initiale des unités considérées comme défenseurs pour cet engagement.
+ */
+async function resolveCombatEngagement(combatId, initialAttackerUnits, initialDefenderUnits) {
+    // Filtrer les unités qui pourraient avoir été éliminées depuis le dernier tick de combat ou qui ne sont plus valides.
+    let livingAttackerUnits = initialAttackerUnits.filter(u => u && u.health > 0);
+    let livingDefenderUnits = initialDefenderUnits.filter(u => u && u.health > 0);
+
+    // Si un côté n'a plus d'unités vivantes, le combat se termine.
+    if (livingAttackerUnits.length === 0 || livingDefenderUnits.length === 0) {
+        originalConsoleLog(`[resolveCombatEngagement] Combat ID ${combatId} terminé : un côté éliminé.`);
+        if (combatTimers.has(combatId)) {
+            clearTimeout(combatTimers.get(combatId));
+            combatTimers.delete(combatId);
+        }
+        return;
+    }
+
+    // Déterminer l'attaquant et le défenseur réels en se basant sur la logique originale (par exemple, camp Bleu vs camp Rouge ou position initiale de l'unité).
+    // Ceci suppose que nous avons un moyen de définir qui est "attaquant" et qui est "défenseur" pour le résultat du combat.
+    // La fonction `evaluateAttackDefense` gère déjà cela en prenant deux groupes.
+
+    const stats = evaluateAttackDefense(livingAttackerUnits, livingDefenderUnits);
+
+    // Si aucune unité n'est activement engagée, le combat se termine.
+    if (stats.defenseInBattle.size === 0 && stats.attackInBattle.size === 0) {
+        originalConsoleLog(`[resolveCombatEngagement] Combat ID ${combatId} terminé : plus d'unités à portée.`);
+        if (combatTimers.has(combatId)) {
+            clearTimeout(combatTimers.get(combatId));
+            combatTimers.delete(combatId);
+        }
+        return;
+    }
+
+    const totalAttackerAttack = stats.totalStatAttacker;
+    const totalDefenderDefense = stats.totalStatDefender;
+
+    originalConsoleLog(`[resolveCombatEngagement] Combat ID ${combatId}: Stats agrégées : Attaque totale de l'attaquant = ${totalAttackerAttack.toFixed(2)}, Défense totale du défenseur = ${totalDefenderDefense.toFixed(2)}.`);
+
+    const combatResult = resolveCombat(totalAttackerAttack, totalDefenderDefense);
+    originalConsoleLog(`[resolveCombatEngagement] Combat ID ${combatId}: Résultat du combat : ${combatResult.outcome}. Dégâts : ${combatResult.damage.toFixed(2)}. Cible : ${combatResult.targetSide}.`);
+
+    // Trouvez une unité représentative pour l'affichage du message (par exemple, la première unité de chaque côté)
+    const firstAttackerUnit = Array.from(livingAttackerUnits)[0];
+    const firstEnemyUnitInContactUnit = Array.from(livingDefenderUnits)[0];
+
+    let outcomeMessage = `Combat à (${firstAttackerUnit.row}, ${firstAttackerUnit.col}) vs (${firstEnemyUnitInContactUnit.row}, ${firstEnemyUnitInContactUnit.col}): `;
+    if (combatResult.outcome === 'attacker') {
+        outcomeMessage += `Victoire pour l'armée ${firstAttackerUnit.armyColor === ARMY_COLOR_BLUE ? 'Bleue' : 'Rouge'}.`;
+    } else if (combatResult.outcome === 'defender') {
+        outcomeMessage += `Victoire pour l'armée ${firstEnemyUnitInContactUnit.armyColor === ARMY_COLOR_BLUE ? 'Bleue' : 'Rouge'}.`;
+    } else {
+        outcomeMessage += `Égalité.`;
+    }
+    outcomeMessage += ` Dégâts appliqués (${combatResult.targetSide}) : ${combatResult.damage.toFixed(1)}`;
+    console.log(outcomeMessage);
+
+    let unitsEliminatedThisCombatInstance = [];
+    if (combatResult.damage > 0) {
+        if (combatResult.targetSide === 'defender' || combatResult.targetSide === 'both') {
+            originalConsoleLog(`[resolveCombatEngagement] Appliquer ${combatResult.damage.toFixed(2)} dégâts aux unités du camp Défenseur.`);
+            const eliminatedDefender = distributeDamage(stats.defenseInBattle, combatResult.damage);
+            unitsEliminatedThisCombatInstance.push(...eliminatedDefender);
+        }
+        if (combatResult.targetSide === 'attacker' || combatResult.targetSide === 'both') {
+            originalConsoleLog(`[resolveCombatEngagement] Appliquer ${combatResult.damage.toFixed(2)} dégâts aux unités du camp Attaquant.`);
+            const eliminatedAttacker = distributeDamage(stats.attackInBattle, combatResult.damage);
+            unitsEliminatedThisCombatInstance.push(...eliminatedAttacker);
+        }
+    }
+
+    // Vérifier l'élimination du Général
+    if (!gameOver && unitsEliminatedThisCombatInstance.length > 0) {
+        const eliminatedGeneral = unitsEliminatedThisCombatInstance.find(unit => unit && unit.type === UnitType.GENERAL);
+
+        if (eliminatedGeneral) {
+            originalConsoleLog(`[resolveCombatEngagement] Général éliminé pendant le combat ! ID de l'unité : ${eliminatedGeneral.id}, Armée : ${eliminatedGeneral.armyColor === ARMY_COLOR_BLUE ? 'Bleue' : 'Rouge'}`);
+
+            if (eliminatedGeneral.armyColor === ARMY_COLOR_BLUE) {
+                if (playerArmyColor === ARMY_COLOR_BLUE)
+                    console.log("Le Général Bleu a été éliminé ! Vous avez perdu.");
+                else
+                    console.log("Le Général Bleu a été éliminé ! Vous avez gagné.");
+                endGame(ARMY_COLOR_RED);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'GAME_OVER', outcome: 'red' }));
+                }
+            } else if (eliminatedGeneral.armyColor === ARMY_COLOR_RED) {
+                if (playerArmyColor === ARMY_COLOR_RED)
+                    console.log("Le Général Rouge a été éliminé ! Vous avez perdu.");
+                else
+                    console.log("Le Général Rouge a été éliminé ! Vous avez gagné.");
+                endGame(ARMY_COLOR_BLUE);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'GAME_OVER', outcome: 'blue' }));
+                }
+            }
+            // Jeu terminé, annuler ce timer de combat
+            if (combatTimers.has(combatId)) {
+                clearTimeout(combatTimers.get(combatId));
+                combatTimers.delete(combatId);
+            }
+            return;
+        }
+    }
+
+    // Filtrer la liste principale currentUnits pour supprimer les unités dont la santé est maintenant <= 0
+    // Cela se produit APRÈS la vérification de l'élimination du Général dans cette instance
+    const unitsBeforeFilter = currentUnits.length;
+    unitOnId.clear(); // Effacer et reconstruire la map unitOnId
+    currentUnits = currentUnits.filter(unit => unit && unit.health > 0 && unitOnId.set(unit.id, unit));
+
+    if (unitsBeforeFilter !== currentUnits.length) {
+        originalConsoleLog(`[resolveCombatEngagement] Éliminé ${unitsBeforeFilter - currentUnits.length} unités localement après l'instance de combat. Total restant : ${currentUnits.length}.`);
+    }
+
+    // Envoyer les résultats du combat au serveur/Rouge
+    const affectedUnits = new Set([...Array.from(stats.attackInBattle), ...Array.from(stats.defenseInBattle)]);
+    const combatUpdate = {
+        type: 'COMBAT_RESULT',
+        updatedUnits: Array.from(affectedUnits).filter(u => u && u.health > 0).map(unit => ({
+            id: unit.id,
+            health: unit.health,
+            row: unit.row,
+            col: unit.col
+        })),
+        eliminatedUnitIds: unitsEliminatedThisCombatInstance.map(u => u.id)
+    };
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(combatUpdate));
+    } else {
+        console.warn("Connexion au serveur non établie. Résultats du combat non synchronisés.");
+    }
+
+    // Re-vérifier si le combat doit continuer (c'est-à-dire si les deux camps ont encore des unités à portée)
+    // Nous devons re-filtrer `currentUnits` car certaines pourraient avoir été éliminées.
+    const allLivingUnits = currentUnits.filter(u => u && u.health > 0);
+    const stillLivingAttackers = allLivingUnits.filter(u => initialAttackerUnits.some(au => au.id === u.id));
+    const stillLivingDefenders = allLivingUnits.filter(u => initialDefenderUnits.some(du => du.id === u.id));
+
+    // Fonction d'aide pour vérifier si une unité est à portée de toute unité de l'armée adverse dans cet engagement
+    const isInRangeOfOpponent = (unit, opposingUnits) => {
+        const unitRange = getEffectiveCombatRange(unit, UNIT_COMBAT_STATS, UnitType);
+        for (const opponent of opposingUnits) {
+            if (getHexDistance(unit.row, unit.col, opponent.row, opponent.col) <= unitRange) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Vérifier s'il y a encore des unités des deux côtés qui sont à portée l'une de l'autre
+    let combatStillActive = false;
+    if (stillLivingAttackers.length > 0 && stillLivingDefenders.length > 0) {
+        for (const attacker of stillLivingAttackers) {
+            if (isInRangeOfOpponent(attacker, stillLivingDefenders)) {
+                combatStillActive = true;
+                break;
+            }
+        }
+        if (!combatStillActive) { // Si les attaquants ne peuvent pas atteindre les défenseurs, vérifier si les défenseurs peuvent atteindre les attaquants
+             for (const defender of stillLivingDefenders) {
+                if (isInRangeOfOpponent(defender, stillLivingAttackers)) {
+                    combatStillActive = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (combatStillActive && !gameOver) { // Ne reprogrammer que si le jeu n'est pas terminé
+        originalConsoleLog(`[resolveCombatEngagement] Combat ID ${combatId} continue. Reprogrammation du prochain tick.`);
+        const realTimeForNextCombatTick = COMBAT_INTERVAL_GAME_MINUTES * MILLISECONDS_PER_GAME_MINUTE;
+        const timerId = setTimeout(() => resolveCombatEngagement(combatId, stillLivingAttackers, stillLivingDefenders), realTimeForNextCombatTick);
+        combatTimers.set(combatId, timerId);
+    } else {
+        originalConsoleLog(`[resolveCombatEngagement] Combat ID ${combatId} terminé.`);
+        if (combatTimers.has(combatId)) {
+            clearTimeout(combatTimers.get(combatId));
+            combatTimers.delete(combatId);
+        }
+    }
+}
+
+/**
  * The main game loop: updates time, manages unit movement, detects combat (Blue only), and redraws.
  * Movement is now processed incrementally within this loop based on accumulated game time.
  * Depends on MILLISECONDS_PER_GAME_MINUTE, UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR, ARMY_COLOR_BLUE, ARMY_COLOR_RED, Terrain, UnitType, UNIT_HEALTH from constants.js.
@@ -1995,43 +2187,33 @@ function gameLoop(currentTime) {
         // --- Combat Time Tracking and Resolution ---
         // This section runs ONLY on the Blue client, as it is the combat authority.
         // Only process combat if the game is NOT over
+        // --- Combat Time Tracking and Resolution ---
+        // This section runs ONLY on the Blue client, as it is the combat authority.
+        // Only process combat if the game is NOT over
         if (gameTimeInMinutes >= lastCombatGameTimeInMinutes + COMBAT_INTERVAL_GAME_MINUTES) {
-            originalConsoleLog(`[gameLoop] ${COMBAT_INTERVAL_GAME_MINUTES} game minutes elapsed. Initiating combat checks (Blue Client).`);
-            // Clear previous combat highlights at the start of a new combat interval
+            originalConsoleLog(`[gameLoop] ${COMBAT_INTERVAL_GAME_MINUTES} game minutes elapsed. Initiating combat detection (Blue Client).`);
+
+            // Effacer les précédents surlignages de combat au début d'un nouvel intervalle de détection
             combatHexes.clear();
+            allUnitInvolvedCombat.clear(); // Effacer le set global pour le nouveau cycle de détection
 
-            lastCombatGameTimeInMinutes = gameTimeInMinutes; // Update last combat time *before* resolving combat
+            lastCombatGameTimeInMinutes = gameTimeInMinutes; // Mettre à jour la dernière heure de combat *avant* de résoudre le combat
 
-            const engagementsProcessedBleu = new Set();
-            const engagementsProcessedRouge = new Set();
-            // Filter units to only include living ones for combat checks
-            let lesBleus = [];
-            let lesRouges = [];
-            currentUnits.forEach(unit => {
-                if (unit !== null && unit !== undefined && unit.health > 0) {
-                    if (unit.armyColor === ARMY_COLOR_BLUE)
-                        lesBleus.push(unit);
-                    else
-                        lesRouges.push(unit);
-                }
-            })
+            const lesBleus = currentUnits.filter(u => u && u.health > 0 && u.armyColor === ARMY_COLOR_BLUE);
+            const lesRouges = currentUnits.filter(u => u && u.health > 0 && u.armyColor === ARMY_COLOR_RED);
 
-            let oneCombat = false;
-            if (lesBleus && lesRouges) {
-                // Iterate through all living units to check for engagements FROM them
+            // Garder une trace des unités déjà assignées à un engagement de combat dans ce cycle de détection
+            const unitsAlreadyInEngagement = new Set();
+            let newCombatDetectedThisCycle = false;
+
+            if (lesBleus.length > 0 && lesRouges.length > 0) {
+                // Itérer sur toutes les unités Bleues vivantes pour vérifier les engagements
                 lesBleus.forEach(unitBlue => {
-                    if (unitBlue === null || unitBlue === undefined || unitBlue.health <= 0)
-                        return;
+                    if (unitBlue.health <= 0 || unitsAlreadyInEngagement.has(unitBlue.id)) return;
 
-                    // Only initiate checks FROM our units (Blue) towards enemies (Red)
-                    // This simplifies the N^2 check, only need to check Blue units vs Red units.
-                    // Combat logic is symmetric and calculates attack/defense for both sides regardless of who initiates.
-
-                    let attackerParticipatingUnits = new Set();                    
-
-                    let firstDefender = null;
-                    //First, we look for all enemy units within firing range
-                    let defenderParticipatingUnits = new Set();
+                    let potentialAttackerUnits = new Set();
+                    let potentialDefenderUnits = new Set();
+                    let firstEnemyUnitInContact = null;
                     const hexvoisins = getHexesInRange(unitBlue.row, unitBlue.col, MAX_RANGE); // Check current hex and neighbors for range 1 // Uses game function
                     voisins = new Set();
                     voisins.add(unitBlue);
@@ -2048,20 +2230,20 @@ function gameLoop(currentTime) {
                                 const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
                                 //Unit B is in range, we keep it
                                 if (dst <= rangeBlue) {
-                                    defenderParticipatingUnits.add(unitRed);
-                                    attackerParticipatingUnits.add(unitBlue);
-                                    if (firstDefender == null) {
-                                        firstDefender = unitRed;
+                                    potentialDefenderUnits.add(unitRed);
+                                    potentialAttackerUnits.add(unitBlue);
+                                    if (firstEnemyUnitInContact == null) {
+                                        firstEnemyUnitInContact = unitRed;
                                     }
                                 }
                                 else {
                                     //We still check if our unit is threatened by unitRed
                                     const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
                                     if (dst <= rangeRed) {
-                                        defenderParticipatingUnits.add(unitRed);
-                                        attackerParticipatingUnits.add(unitBlue);
-                                        if (firstDefender == null) {
-                                            firstDefender = unitRed;
+                                        potentialDefenderUnits.add(unitRed);
+                                        potentialAttackerUnits.add(unitBlue);
+                                        if (firstEnemyUnitInContact == null) {
+                                            firstEnemyUnitInContact = unitRed;
                                         }
                                     }
                                 }
@@ -2070,26 +2252,24 @@ function gameLoop(currentTime) {
                     });
 
                     //No threat to this unit
-                    if (defenderParticipatingUnits.size == 0) {                        
+                    if (potentialDefenderUnits.size == 0) {                        
                         return;
                     }
                     
-                    oneCombat = true;
-
                     //We then check for these potential targets, if there other units involved
                     let loopunit = true;
-                    let newDefenders = defenderParticipatingUnits;
+                    let newDefenders = potentialDefenderUnits;
                     while (loopunit) {           
                         let newAttackers = new Set();             
                         newDefenders.forEach(unitRed => {
                             const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
                             lesBleus.forEach(unitBlue => {
                                 const unitStillExistsAndAlive = (unitBlue !== null && unitBlue !== undefined && unitBlue.health > 0);
-                                if (unitStillExistsAndAlive && !attackerParticipatingUnits.has(unitBlue)) {
+                                if (unitStillExistsAndAlive && !potentialAttackerUnits.has(unitBlue)) {
                                     const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
                                     //The unit is in range, we keep it
                                     if (dst <= rangeRed) {
-                                        attackerParticipatingUnits.add(unitBlue);
+                                        potentialAttackerUnits.add(unitBlue);
                                         newAttackers.add(unitBlue);
                                     }
                                 }
@@ -2103,11 +2283,11 @@ function gameLoop(currentTime) {
                                 const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
                                 lesRouges.forEach(unitRed => {
                                     const unitStillExistsAndAlive = (unitRed !== null && unitRed !== undefined && unitRed.health > 0);
-                                    if (unitStillExistsAndAlive && !defenderParticipatingUnits.has(unitRed)) {
+                                    if (unitStillExistsAndAlive && !potentialDefenderUnits.has(unitRed)) {
                                         const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
                                         //The unit is in range, we keep it
                                         if (dst <= rangeBlue) {
-                                            defenderParticipatingUnits.add(unitRed);
+                                            potentialDefenderUnits.add(unitRed);
                                             newDefenders.add(unitRed);
                                         }
                                     }
@@ -2117,200 +2297,69 @@ function gameLoop(currentTime) {
                         if (!newDefenders)
                             loopunit = false;
                     }
-
-                    skip = false;
-                    attackerParticipatingUnits.forEach(unit => {
-                        if (engagementsProcessedBleu.has(unit)) {
-                            skip = true;
-                        }
-                        else {
-                            engagementsProcessedBleu.add(unit);
-                            allUnitInvolvedCombat.add(unit);
-                        }
-                    });
-                    if (skip)
-                        return;
-
-                    const nb = allUnitInvolvedCombat.size; 
-                    defenderParticipatingUnits.forEach(unit => {
-                        if (engagementsProcessedRouge.has(unit)) {
-                            skip = true;
-                        }
-                        else {
-                            engagementsProcessedRouge.add(unit);
-                            allUnitInvolvedCombat.add(unit);
-                        }
-                    });
-                    if (skip)
-                        return;
-
-                    if (nb < allUnitInvolvedCombat.size) {
-                        playTrumpetSound();
-                        ws.send(JSON.stringify({ type: 'PLAY_SOUND' }));
+                  
+                    if (potentialAttackerUnits.size === 0) {
+                        return; // Pas de contact pour cette unité Bleue
                     }
-                    
-                    //If the red are in the blue camp
-                    //The red are then the attacker...
-                    let firstAttacker;
-                    if (firstDefender.row < currentMapRows/2) {
-                        const attack = attackerParticipatingUnits;
-                        attackerParticipatingUnits = defenderParticipatingUnits;
-                        defenderParticipatingUnits = attack;
-                        firstAttacker = firstDefender;
-                        firstDefender = unitBlue;
-                    }
-                    else
-                        firstAttacker = unitBlue;
-
-                    // Combat Engagement! Mutual engagement confirmed.
-
-                    // --- Mark hexes for combat highlighting (local display on Blue) ---
-                    // Add all hexes occupied by participating units to the combatHexes set
-                    attackerParticipatingUnits.forEach(unit => {
-                        combatHexes.add(`${unit.row},${unit.col}`);
-                    });
-                    defenderParticipatingUnits.forEach(unit => {
-                        combatHexes.add(`${unit.row},${unit.col}`);
-                    });
-                    // --- END Highlighting ---
 
 
-                    // --- Resolve Combat for this Engagement ---
-                    // originalConsoleLog(`[gameLoop] RESOLVING COMBAT! Engagement between Unit ID ${unitA.id} (${getUnitTypeName(unitA.type)} ${unitA.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}) at (${unitA.row}, ${unitA.col}) and Unit ID ${unitB.id} (${getUnitTypeName(unitB.type)} ${unitB.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}) at (${unitB.row}, ${unitB.col}).`);
+                    // À ce stade, potentialAttackerUnits et potentialDefenderUnits contiennent toutes les unités dans cet engagement distinct.
+                    // Créer un ID de combat unique pour cet engagement. Une façon simple est d'utiliser les IDs des unités impliquées, triés.
+                    const allInvolvedIds = [...Array.from(potentialAttackerUnits).map(u => u.id), ...Array.from(potentialDefenderUnits).map(u => u.id)].sort().join('-');
+                    const combatId = `combat-${allInvolvedIds}`;
 
-                    const stats = evaluateAttackDefense(attackerParticipatingUnits, defenderParticipatingUnits);
+                    // Si cet engagement de combat n'est pas déjà actif, démarrer son timer
+                    if (!combatTimers.has(combatId)) {
+                        originalConsoleLog(`[gameLoop] Nouvel engagement de combat détecté : ${combatId}. Initialisation du premier tick.`);
+                        newCombatDetectedThisCycle = true;
+                        playTrumpetSound(); // Jouer le son uniquement pour les nouveaux engagements
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'PLAY_SOUND' }));
+                        }
 
-                    const totalAttackerAttack = stats.totalStatAttacker;
-                    const totalDefenderDefense = stats.totalStatDefender;
+                        // Marquer les unités comme impliquées afin qu'elles ne fassent pas partie d'un autre nouvel engagement dans ce cycle
+                        Array.from(potentialAttackerUnits).forEach(u => unitsAlreadyInEngagement.add(u.id));
+                        Array.from(potentialDefenderUnits).forEach(u => unitsAlreadyInEngagement.add(u.id));
 
-                    // --- Aggregation of Stats ---
-                    originalConsoleLog(`[gameLoop] Aggregated Stats: Total Attacker Attack = ${totalAttackerAttack.toFixed(2)}, Total Defender Defense = ${totalDefenderDefense.toFixed(2)}.`);
-                    // --- END Aggregation of Stats ---
+                        // Ajouter les hexagones à combatHexes pour le surlignage
+                        Array.from(potentialAttackerUnits).forEach(unit => {
+                            combatHexes.add(`${unit.row},${unit.col}`);
+                        });
+                        Array.from(potentialDefenderUnits).forEach(unit => {
+                            combatHexes.add(`${unit.row},${unit.col}`);
+                        });
 
-                    // --- Resolve combat and apply damage (locally on Blue) ---
-                    const combatResult = resolveCombat(totalAttackerAttack, totalDefenderDefense); // Uses game function, constants
-                    originalConsoleLog(`[gameLoop] Combat Result: ${combatResult.outcome}. Damage: ${combatResult.damage.toFixed(2)}. Target: ${combatResult.targetSide}.`);
+                        // Déterminer l'attaquant et le défenseur réels pour la fonction resolveCombatEngagement
+                        // en se basant sur la logique originale (par exemple, position du camp).
+                        let actualAttackerUnits = Array.from(potentialAttackerUnits);
+                        let actualDefenderUnits = Array.from(potentialDefenderUnits);
 
-                    // Display combat outcome message to the console div (synced via wrapped console)
-                    const attackerArmyColor = firstAttacker.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'; // Uses constant
-                    const defenderArmyColor = firstDefender.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'; // Uses constant
-                    let outcomeMessage = `Combat at (${firstAttacker.row}, ${firstAttacker.col}) vs (${firstDefender.row}, ${firstDefender.col}): `; // Base message
+                        // Si les rouges sont dans le camp bleu, les rouges sont alors l'attaquant...
+                        if (firstEnemyUnitInContact && firstEnemyUnitInContact.row < currentMapRows / 2) {
+                            actualAttackerUnits = Array.from(potentialDefenderUnits);
+                            actualDefenderUnits = Array.from(potentialAttackerUnits);
+                        }
 
-                    if (combatResult.outcome === 'attacker') {
-                        outcomeMessage += `Victory for the ${attackerArmyColor} army.`;
-                    } else if (combatResult.outcome === 'defender') {
-                        outcomeMessage += `Victory for the ${defenderArmyColor} army.`;
+                        // Démarrer le premier tick de cet engagement de combat
+                        const realTimeForNextCombatTick = COMBAT_INTERVAL_GAME_MINUTES * MILLISECONDS_PER_GAME_MINUTE;
+                        const timerId = setTimeout(() => resolveCombatEngagement(combatId, actualAttackerUnits, actualDefenderUnits), realTimeForNextCombatTick);
+                        combatTimers.set(combatId, timerId);
                     } else {
-                        outcomeMessage += `Draw.`;
+                        // Si le combat est déjà en cours, assurez-vous simplement que ses hexagones sont surlignés pour ce tick
+                        Array.from(potentialAttackerUnits).forEach(unit => {
+                            combatHexes.add(`${unit.row},${unit.col}`);
+                        });
+                        Array.from(potentialDefenderUnits).forEach(unit => {
+                            combatHexes.add(`${unit.row},${unit.col}`);
+                        });
                     }
-                    outcomeMessage += ` Damage applied (${combatResult.targetSide}) : ${combatResult.damage.toFixed(1)}`;
-                    console.log(outcomeMessage); // This goes to console div (synced)
-
-
-                    let unitsEliminatedThisCombatInstance = [];
-                    if (combatResult.damage > 0) {
-                        // Apply damage to the units in the relevant group(s)
-                        if (combatResult.targetSide === 'defender' || combatResult.targetSide === 'both') {
-                            originalConsoleLog(`[gameLoop] Applying ${combatResult.damage.toFixed(2)} damage to units in the Defender camp.`);
-                            const eliminatedDefender = distributeDamage(stats.defenseInBattle, combatResult.damage); // Uses game function
-                            unitsEliminatedThisCombatInstance.push(...eliminatedDefender);
-                        }
-                        if (combatResult.targetSide === 'attacker' || combatResult.targetSide === 'both') {
-                            originalConsoleLog(`[gameLoop] Applying ${combatResult.damage.toFixed(2)} damage to units in the Attacker camp.`);
-                            const eliminatedAttacker = distributeDamage(stats.attackInBattle, combatResult.damage); // Uses game function
-                            unitsEliminatedThisCombatInstance.push(...eliminatedAttacker);
-                        }
-                    }
-                    // --- END Resolve combat and apply damage ---
-
-
-                    // *** NEW : Check for General elimination after this combat instance ***
-                    if (!gameOver && unitsEliminatedThisCombatInstance.length > 0) { // Check if game is not already over by a previous instance
-                        const eliminatedGeneral = unitsEliminatedThisCombatInstance.find(unit => unit && unit.type === UnitType.GENERAL); // Uses constant
-
-                        if (eliminatedGeneral) {
-                            originalConsoleLog(`[gameLoop] Blue Client: General eliminated during combat instance! Unit ID: ${eliminatedGeneral.id}, Army: ${eliminatedGeneral.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}`);
-
-                            if (eliminatedGeneral.armyColor === ARMY_COLOR_BLUE) { // Blue's General eliminated
-                                if (playerArmyColor === ARMY_COLOR_BLUE)
-                                    console.log("The Blue General has been eliminated! You lost");
-                                else
-                                    console.log("The Blue General has been eliminated! You won");
-
-                                endGame(ARMY_COLOR_RED); // Trigger game over state for losing on Blue side
-
-                                // Send GAME_OVER message to Red client via server
-                                if (ws && ws.readyState === WebSocket.OPEN) {
-                                    ws.send(JSON.stringify({ type: 'GAME_OVER', outcome: 'red' }));
-                                    originalConsoleLog("[gameLoop] Blue Client: Sent GAME_OVER (lose) message to server.");
-                                }
-
-                            } else if (eliminatedGeneral.armyColor === ARMY_COLOR_RED) { // Red's General eliminated
-                                if (playerArmyColor === ARMY_COLOR_RED)
-                                    console.log("The Red General has been eliminated! You lost");
-                                else
-                                    console.log("The Red General has been eliminated! You won");
-
-                                endGame(ARMY_COLOR_BLUE); // Trigger game over state for winning on Blue side
-
-                                // Send GAME_OVER message to Red client via server
-                                if (ws && ws.readyState === WebSocket.OPEN) {
-                                    ws.send(JSON.stringify({ type: 'GAME_OVER', outcome: 'blue' }));
-                                    originalConsoleLog("[gameLoop] Blue Client: Sent GAME_OVER (win) message to server.");
-                                }
-                            }                            
-                            // If a general was eliminated and game is over, no need to process more combat instances in this interval
-                            return; // Exit the forEach for unitB
-                        }
-                        updateVisibility();
-                    }
-                    // *** END NEW : Check for General elimination ***
-
-
-                    // *** Send combat results to the server/Red ***
-                    // Send state of all participating units and IDs of eliminated units
-                    const affectedUnits = new Set([...attackerParticipatingUnits, ...defenderParticipatingUnits]);
-                    const combatUpdate = {
-                        type: 'COMBAT_RESULT',
-                        // Send just essential state for affected units that are STILL ALIVE locally
-                        updatedUnits: Array.from(affectedUnits).filter(u => u && u.health > 0).map(unit => ({
-                            id: unit.id,
-                            health: unit.health,
-                            row: unit.row, // Include position
-                            col: unit.col
-                        })),
-                        eliminatedUnitIds: unitsEliminatedThisCombatInstance.map(u => u.id) // Send the IDs of units eliminated by this combat instance
-                    };
-
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify(combatUpdate));
-                        // originalConsoleLog("[gameLoop] Sent COMBAT_RESULT update to server."); // Chatty
-                    } else {
-                        console.warn("Server connection not established. Combat results not synchronized.");
-                    }
-                    // *** END Sending results ***
-
-
-                    // *** Immediate elimination of units after combat instance (Blue side) ***
-                    // Filter the main currentUnits list to remove units that now have health <= 0
-                    // This happens AFTER checking for General elimination within this instance
-                    const unitsBeforeFilter = currentUnits.length;
-                    unitOnId.clear();
-                    currentUnits = currentUnits.filter(unit => unit && unit.health > 0 && unitOnId.set(unit.id, unit));
-
-                    if (unitsBeforeFilter !== currentUnits.length) {
-                        originalConsoleLog(`[gameLoop] Eliminated ${unitsBeforeFilter - currentUnits.length} units locally after combat instance. Total remaining: ${currentUnits.length}.`);
-                    }
-                    // *** END Immediate elimination ***
-
-
-
-                    // If game is over (checked within the General elimination block), break out of further combat checks
-                    if (gameOver) return; // Exit the forEach for unitA
-                });                
+                });
             }
-            if (oneCombat == false)
+
+            // Si aucun nouveau combat n'a été détecté dans ce cycle, effacer le global allUnitInvolvedCombat (utilisé pour le son)
+            if (!newCombatDetectedThisCycle) {
                 allUnitInvolvedCombat.clear();
+            }
         }
 
         // *** Final HP Recovery Phase by Supply (End of Tick) ***

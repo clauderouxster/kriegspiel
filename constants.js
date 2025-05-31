@@ -219,7 +219,6 @@ const UNIT_HEALTH = {
     [UnitType.SPY]: 5, // Spy units are fragile
     [UnitType.GENERAL]: 10 // Nouveau : Général - PV à 10
 };
-
 // Combat Damage Scaling Factor
 // Multiplier for the damage calculated in combat resolution
 const COMBAT_DAMAGE_SCALE = 0.1; // Example: winner's total attack/defense * 0.1 = damage dealt
@@ -227,7 +226,7 @@ const COMBAT_RANDOMNESS_FACTOR = 0.4;
 
 // Combat Resolution Interval (in game minutes)
 // How often the game loop checks for and resolves combat engagements
-const COMBAT_INTERVAL_GAME_MINUTES = 50; // Example: every 10 game minutes
+const COMBAT_INTERVAL_GAME_MINUTES = 25; // Example: every 10 game minutes
 const TRUMPET_INTERVAL_GAME_MINUTES = 500; // Example: every 10 game minutes
 
 // Fog of War Color (used for drawing unseen hexes)
