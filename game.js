@@ -1779,6 +1779,11 @@ function moveUnitStep(unit) {
 
         if (isOccupied) continue;
 
+        if (neighborR == targetR && neighborC == targetC) {
+            viableNeighbors = [{ r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep }];
+            break;
+        }
+
         viableNeighbors.push({ r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep });
     }
 
