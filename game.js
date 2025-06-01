@@ -1713,49 +1713,13 @@ function updateVisibility() {
  * Depends on getNeighbors, isValid from utils.js.
  * Access global currentMapRows, currentMapCols.
  */
-function getHexesInRange_old(centerR, centerC, range) {
-    const hexes = new Set();
-    const queue = [{ r: centerR, c: centerC, dist: 0 }];
-    const visited = new Set(`${centerR},${centerC}`);
-
-    // Include the center hex itself
-    if (isValid(centerR, centerC, currentMapRows, currentMapCols)) {
-        hexes.add(`${centerR},${centerC}`);
-    } else {
-        // Should not happen if called with valid center, but safety check
-        originalConsoleWarn(`[getHexesInRange] Invalid center coordinates provided: (${centerR}, ${centerC})`);
-        return []; // Return empty array if center is invalid
-    }
-
-
-    while (queue.length > 0) {
-        const { r, c, dist } = queue.shift();
-
-        // If we are within range, explore neighbors
-        if (dist < range) {
-            const neighbors = getNeighbors(r, c, currentMapRows, currentMapCols);
-            for (const [nr, nc] of neighbors) {
-                const neighborKey = `${nr},${nc}`;
-                if (!visited.has(neighborKey) && isValid(nr, nc, currentMapRows, currentMapCols)) {
-                    visited.add(neighborKey);
-                    hexes.add(neighborKey); // Add the neighbor hex to the set
-                    queue.push({ r: nr, c: nc, dist: dist + 1 });
-                }
-            }
-        }
-    }
-
-    // Convert Set of strings back to array of [r, c] pairs
-    const hexArray = Array.from(hexes).map(key => key.split(',').map(Number));
-    return hexArray;
-}
 
 function getHexesInRange(centerR, centerC, range) {
     const neighbors = getNeighbors(centerR, centerC, currentMapRows, currentMapCols);
     if (range == 1)
         return neighbors;
 
-    const visited = new Set(`${centerR},${centerC}`);
+    const visited = new Set();
     let currentneighbors = neighbors;
     rg = 1;
     while (rg < range) {
@@ -1763,6 +1727,8 @@ function getHexesInRange(centerR, centerC, range) {
         for (const [nr, nc] of currentneighbors) {
             const newneighbors = getNeighbors(nr, nc, currentMapRows, currentMapCols);
             newneighbors.forEach(u => {
+                if (u[0] == centerR && u[1] == centerC)
+                    return;
                 const neighborKey = `${u[0]},${u[1]}`;
                 if (visited.has(neighborKey) || !isValid(u[0], u[1], currentMapRows, currentMapCols))
                     return;
