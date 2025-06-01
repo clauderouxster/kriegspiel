@@ -98,9 +98,9 @@ const MILLISECONDS_PER_GAME_HOUR = MILLISECONDS_PER_GAME_MINUTE * 60;
 const TERRAIN_MOVEMENT_COSTS = {
     [UnitType.INFANTERY]: { // Infanterie
         [Terrain.FLAT]: 1,
-        [Terrain.MOUNTAIN]: 1, // Cannot cross mountains
+        [Terrain.MOUNTAIN]: 3, 
         [Terrain.HILL]: 2,
-        [Terrain.SWAMP]: 3,
+        [Terrain.SWAMP]: 2,
         [Terrain.LAKE]: Infinity, // Cannot cross lakes
         [Terrain.FOREST]: 2
     },
@@ -108,7 +108,7 @@ const TERRAIN_MOVEMENT_COSTS = {
         [Terrain.FLAT]: 1.5,
         [Terrain.MOUNTAIN]: Infinity, // Cannot cross mountains
         [Terrain.HILL]: 3,
-        [Terrain.SWAMP]: Infinity, // Cannot cross swamps
+        [Terrain.SWAMP]: 3, // Cannot cross swamps
         [Terrain.LAKE]: Infinity, // Cannot cross lakes
         [Terrain.FOREST]: 2.5
     },
@@ -116,9 +116,9 @@ const TERRAIN_MOVEMENT_COSTS = {
         [Terrain.FLAT]: 0.8, // Faster on flat
         [Terrain.MOUNTAIN]: Infinity, // Cannot cross mountains
         [Terrain.HILL]: 1.5,
-        [Terrain.SWAMP]: 4, // Slowed by swamps
+        [Terrain.SWAMP]: 2, // Slowed by swamps
         [Terrain.LAKE]: Infinity, // Cannot cross lakes
-        [Terrain.FOREST]: 3 // Slowed by forests
+        [Terrain.FOREST]: 2 // Slowed by forests
     },
     [UnitType.SUPPLY]: { // Intendance
         [Terrain.FLAT]: 1,
@@ -137,12 +137,12 @@ const TERRAIN_MOVEMENT_COSTS = {
         [Terrain.FOREST]: 1
     },
     [UnitType.GENERAL]: { // Nouveau : Général - vitesse environ 10 (similaire infanterie)
-        [Terrain.FLAT]: 1.1, // Légèrement plus lent que l'infanterie sur plat, peut-être?
-        [Terrain.MOUNTAIN]: 1, // Ne peut pas traverser les montagnes
+        [Terrain.FLAT]: 1, // Légèrement plus lent que l'infanterie sur plat, peut-être?
+        [Terrain.MOUNTAIN]: 3,
         [Terrain.HILL]: 2, // Similaire à l'infanterie sur colline
-        [Terrain.SWAMP]: 3.5, // Un peu ralenti par les marais
+        [Terrain.SWAMP]: 2, // Un peu ralenti par les marais
         [Terrain.LAKE]: Infinity, // Ne peut pas traverser les lacs
-        [Terrain.FOREST]: 2.2 // Un peu ralenti par les forêts
+        [Terrain.FOREST]: 2 // Un peu ralenti par les forêts
     }
 };
 
@@ -249,54 +249,57 @@ const STARTING_AREA_PERCENT = 0.1;
 // Movement Costs per hex for each Unit Type on different Terrains
 // Uses a multiplier system: higher number means higher cost (slower movement)
 // Infinity means impassable terrain
+// Movement Costs per hex for each Unit Type on different Terrains
+// Uses a multiplier system: higher number means higher cost (slower movement)
+// Infinity means impassable terrain
 const MOVEMENT_COSTS = {
     [Terrain.FLAT]: {
         [UnitType.INFANTERY]: 1,
-        [UnitType.ARTILLERY]: 1.5, // Slightly slower on flat
-        [UnitType.CAVALRY]: 0.5,   // Faster on flat
+        [UnitType.ARTILLERY]: 1.5,
+        [UnitType.CAVALRY]: 0.8,
         [UnitType.SUPPLY]: 1,
         [UnitType.SPY]: 1,
-        [UnitType.GENERAL]: 1.1 // Nouveau : Général
+        [UnitType.GENERAL]: 1
     },
     [Terrain.MOUNTAIN]: {
-        [UnitType.INFANTERY]: 3, // Impassable for most
+        [UnitType.INFANTERY]: 3,
         [UnitType.ARTILLERY]: Infinity,
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
-        [UnitType.SPY]: 3, // Spies can navigate mountains slowly
-        [UnitType.GENERAL]: Infinity // Nouveau : Général
+        [UnitType.SPY]: 1,
+        [UnitType.GENERAL]: 3
     },
     [Terrain.HILL]: {
-        [UnitType.INFANTERY]: 1.5, // Slower on hills
-        [UnitType.ARTILLERY]: 2,    // Slower
-        [UnitType.CAVALRY]: 1,     // Not too bad for cavalry
-        [UnitType.SUPPLY]: 1.5,
+        [UnitType.INFANTERY]: 2,
+        [UnitType.ARTILLERY]: 3,
+        [UnitType.CAVALRY]: 1.5,
+        [UnitType.SUPPLY]: 2,
         [UnitType.SPY]: 1,
-        [UnitType.GENERAL]: 2 // Nouveau : Général
+        [UnitType.GENERAL]: 2
     },
     [Terrain.SWAMP]: {
-        [UnitType.INFANTERY]: 2, // Very slow in swamps
-        [UnitType.ARTILLERY]: Infinity, // Impassable for artillery
-        [UnitType.CAVALRY]: 3,     // Very slow
-        [UnitType.SUPPLY]: 2.5,  // Slow
-        [UnitType.SPY]: 1.5,  // A bit slower
-        [UnitType.GENERAL]: 3.5 // Nouveau : Général
+        [UnitType.INFANTERY]: 2,
+        [UnitType.ARTILLERY]: 3,
+        [UnitType.CAVALRY]: 2,
+        [UnitType.SUPPLY]: 3,
+        [UnitType.SPY]: 1,
+        [UnitType.GENERAL]: 2
     },
     [Terrain.LAKE]: {
-        [UnitType.INFANTERY]: Infinity, // Impassable for all ground units
+        [UnitType.INFANTERY]: Infinity,
         [UnitType.ARTILLERY]: Infinity,
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
         [UnitType.SPY]: Infinity,
-        [UnitType.GENERAL]: Infinity // Nouveau : Général
+        [UnitType.GENERAL]: Infinity
     },
     [Terrain.FOREST]: {
-        [UnitType.INFANTERY]: 1.2, // Slightly slower in forest
-        [UnitType.ARTILLERY]: 2,    // Slow in forest
-        [UnitType.CAVALRY]: 1.5,   // Slower
-        [UnitType.SUPPLY]: 1.2,
-        [UnitType.SPY]: 0.8,   // Slightly faster in forest (concealment)
-        [UnitType.GENERAL]: 2.2 // Nouveau : Général
+        [UnitType.INFANTERY]: 2,
+        [UnitType.ARTILLERY]: 2.5,
+        [UnitType.CAVALRY]: 2,
+        [UnitType.SUPPLY]: 2,
+        [UnitType.SPY]: 1,
+        [UnitType.GENERAL]: 2
     },
     // Add UNASSIGNED or other temporary states if needed, assuming they are impassable
     [Terrain.UNASSIGNED]: {
@@ -305,7 +308,7 @@ const MOVEMENT_COSTS = {
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
         [UnitType.SPY]: Infinity,
-        [UnitType.GENERAL]: Infinity // Nouveau : Général
+        [UnitType.GENERAL]: Infinity
     },
     [HILL_CANDIDATE]: { // Assuming candidate states are also impassable
         [UnitType.INFANTERY]: Infinity,
@@ -313,7 +316,7 @@ const MOVEMENT_COSTS = {
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
         [UnitType.SPY]: Infinity,
-        [UnitType.GENERAL]: Infinity // Nouveau : Général
+        [UnitType.GENERAL]: Infinity
     },
     [SWAMP_CANDIDATE]: { // Assuming candidate states are also impassable
         [UnitType.INFANTERY]: Infinity,
@@ -321,7 +324,7 @@ const MOVEMENT_COSTS = {
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
         [UnitType.SPY]: Infinity,
-        [UnitType.GENERAL]: Infinity // Nouveau : Général
+        [UnitType.GENERAL]: Infinity
     },
 };
 

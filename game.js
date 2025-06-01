@@ -1815,6 +1815,12 @@ function moveUnitStep(unit) {
 
         const combinedMetric = targetDistance * 1000 + (gameMinutesNeededForStep + previousHexPenalty) + randomFactor;
 
+        if (neighborR == targetR && neighborC == targetC) {
+            minCombinedMetric = combinedMetric;
+            bestNextHex = { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep };
+            break;
+        }
+
         if (bestNextHex === null || combinedMetric < minCombinedMetric) {
             minCombinedMetric = combinedMetric;
             bestNextHex = { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep };
@@ -1846,7 +1852,7 @@ function moveUnitStep(unit) {
                 visitCount++;
                 unitHexVisits.set(currentHexKey, visitCount);
 
-                if (visitCount >= 3) {
+                if (visitCount >= 2) {
                     originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} detected loop. Stopping movement.`);
                     movedHexUnit.delete(unit);
                     unit.targetRow = null;
@@ -2700,14 +2706,6 @@ function handleCanvasClick(event) {
             selectedUnits.push(unitAtClickedHex); // Select the clicked unit
             console.log(`${getUnitTypeName(unitAtClickedHex.type)} of the ${unitAtClickedHex.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army at (${unitAtClickedHex.row}, ${unitAtClickedHex.col}) selected (health:${unitAtClickedHex.health}).`);
             originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Selected unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}).`);
-        } else if (isValidClickLocation && unitAtClickedHex && !isVisible) {
-            originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Clicked on unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}), but hex is not visible. Cannot select/interact.`);
-        } else if (isValidClickLocation && unitAtClickedHex && unitAtClickedHex.armyColor !== playerArmyColor) {
-            originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Clicked on enemy unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}). Cannot select.`);
-        } else if (isValidClickLocation) {
-            originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Clicked on empty hex (${clickedR}, ${clickedC}). No unit selected.`);
-        } else {
-            originalConsoleLog(`[handleCanvasClick] ${shiftKey ? 'Shift+Click' : 'Click'}: Clicked outside valid map bounds. No unit selected.`);
         }
 
     } else {
@@ -2732,17 +2730,7 @@ function handleCanvasClick(event) {
                     console.log(`${getUnitTypeName(unitAtClickedHex.type)} of the ${unitAtClickedHex.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army at (${unitAtClickedHex.row}, ${unitAtClickedHex.col}) added to selection.`);
                     originalConsoleLog(`[handleCanvasClick] Shift+Click: Added unit ID ${unitAtClickedHex.id} to selection.`);
                 }
-            } else if (isValidClickLocation && unitAtClickedHex && !isVisible) {
-                originalConsoleLog(`[handleCanvasClick] Shift+Click: Clicked on unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}), but hex is not visible. Cannot toggle selection.`);
-            } else if (isValidClickLocation && unitAtClickedHex && unitAtClickedHex.armyColor !== playerArmyColor) {
-                originalConsoleLog(`[handleCanvasClick] Shift+Click: Clicked on enemy unit ID ${unitAtClickedHex.id} at (${clickedR}, ${clickedC}). Cannot toggle selection.`);
-            } else if (isValidClickLocation) {
-                originalConsoleLog(`[handleCanvasClick] Shift+Click: Clicked on empty hex (${clickedR}, ${clickedC}). Selection unchanged.`);
-            } else {
-                originalConsoleLog("[handleCanvasClick] Shift+Click: Clicked outside valid map bounds. Selection unchanged.");
-            }
-
-
+            } 
         } else {
             // Simple Click when units are selected.
             // This is either a deselect action or a move order for the selected group.
