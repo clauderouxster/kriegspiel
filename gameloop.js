@@ -1,643 +1,357 @@
 /**
- * Gère un seul pas de mouvement pour une unité donnée.
- * Calcule le prochain hexagone, met à jour la position de l'unité,
- * et redémarre un timer pour le pas suivant si nécessaire.
- * @param {object} unit - L'unité à déplacer.
+ * Gets all hexes within a specified range from a center hex.
+ * Does NOT check for line-of-sight or terrain blocking vision.
+ * Uses a BFS-like approach up to the max range.
+ * Depends on getNeighbors, isValid from utils.js.
+ * Access global currentMapRows, currentMapCols.
  */
-function moveUnitStep(unit) {
-    // Si l'unité a été éliminée pendant que son timer était en cours
-    if (!unit || unit.health <= 0) {
-        //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} is no longer alive. Cancelling further movement.`);
-        unitMovementTimers.delete(unit.id);
-        return;
-    }
+function getHexesInRange(centerR, centerC, range) {
+    const hexes = new Set();
+    const queue = [{ r: centerR, c: centerC, dist: 0 }];
+    const visited = new Set(`${centerR},${centerC}`);
 
-    const currentR = unit.row;
-    const currentC = unit.col;
-    const targetR = unit.targetRow;
-    const targetC = unit.targetCol;
-
-    // Si l'unité est déjà à la cible ou n'a plus de cible valide, annuler le mouvement.
-    if (targetR === null || targetC === null || (currentR === targetR && currentC === targetC)) {
-        //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} arrived at target (${unit.row}, ${unit.col}) or target cleared. Stopping movement.`);
-        movedHexUnit.delete(unit); // Supprimer de la liste de détection de boucle
-        unit.targetRow = null;
-        unit.targetCol = null;
-        unit.movementProgress = 0; // Réinitialiser le progrès
-        unit.previousRow = unit.row;
-        unit.previousCol = unit.col;
-        if (unitMovementTimers.has(unit.id)) {
-            clearTimeout(unitMovementTimers.get(unit.id));
-            unitMovementTimers.delete(unit.id);
-        }
-        return; // Arrêter le traitement pour cette unité
-    }
-
-    const neighbors = getNeighbors(currentR, currentC, currentMapRows, currentMapCols);
-    let bestNextHex = null;
-    let minCombinedMetric = Infinity;
-    let viableNeighbors = [];
-
-    const validLivingCurrentUnits = currentUnits.filter(u => u !== null && u !== undefined && u.health > 0);
-
-    for (const neighbor of neighbors) {
-        const neighborR = neighbor[0];
-        const neighborC = neighbor[1];
-
-        if (!isValid(neighborR, neighborC, currentMapRows, currentMapCols)) continue;
-
-        const neighborTerrain = map[neighborR][neighborC];
-        const gameMinutesNeededForStep = calculateMoveDurationGameMinutes(unit.type, neighborTerrain);
-
-        if (gameMinutesNeededForStep === Infinity) continue;
-
-        const unitAtNeighbor = getUnitAt(neighborR, neighborC, validLivingCurrentUnits, "moveUnitStep - movement blocking check neighbor");
-        const isOccupied = (unitAtNeighbor !== null && unitAtNeighbor.id !== unit.id);
-
-        if (isOccupied) continue;
-
-        viableNeighbors.push({ r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep });
-    }
-
-    if (viableNeighbors.length === 0) {
-        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}).`);
-        originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). No viable neighbors.`);
-        movedHexUnit.delete(unit);
-        unit.targetRow = null;
-        unit.targetCol = null;
-        unit.movementProgress = 0;
-        unit.previousRow = unit.row;
-        unit.previousCol = unit.col;
-        if (unitMovementTimers.has(unit.id)) {
-            clearTimeout(unitMovementTimers.get(unit.id));
-            unitMovementTimers.delete(unit.id);
-        }
-        return; // Unité bloquée, arrêter le mouvement
-    }
-
-    let onlyPreviousHexIsViable = viableNeighbors.length === 1 && viableNeighbors[0].r === unit.previousRow && viableNeighbors[0].c === unit.previousCol;
-
-    for (const neighbor of viableNeighbors) {
-        const { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep } = neighbor;
-        const targetDistance = getHexDistance(neighborR, neighborC, targetR, targetC);
-
-        let previousHexPenalty = 0;
-        if (neighborR === unit.previousRow && neighborC === unit.previousCol && !onlyPreviousHexIsViable) {
-            previousHexPenalty = 60 * 5;
-        }
-
-        // Garder le facteur aléatoire pour la cohérence des tests locaux, mais
-        // noter le risque de désynchro sans un PRNG avec seed synchronisée pour le multijoueur.
-        const randomFactor = (Math.random() * 0.01) - 0.005;
-
-        const combinedMetric = targetDistance * 1000 + (gameMinutesNeededForStep + previousHexPenalty) + randomFactor;
-
-        if (bestNextHex === null || combinedMetric < minCombinedMetric) {
-            minCombinedMetric = combinedMetric;
-            bestNextHex = { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep };
-        }
-    }
-
-    if (bestNextHex) {
-        const { r: nextR, c: nextC, gameMinutesCost: gameMinutesNeededForStep } = bestNextHex;
-
-        const oldR = unit.row;
-        const oldC = unit.col;
-
-        unit.row = nextR;
-        unit.col = nextC;
-        unit.previousRow = oldR;
-        unit.previousCol = oldC;
-
-        // Mise à jour de movedHexUnit pour la détection de boucle
-        if (!movedHexUnit.has(unit)) {
-            const hexVisits = new Map();
-            hexVisits.set(`${nextR},${nextC}`, 1);
-            movedHexUnit.set(unit, hexVisits);
-        } else {
-            const unitHexVisits = movedHexUnit.get(unit);
-            const currentHexKey = `${nextR},${nextC}`;
-
-            if (unitHexVisits.has(currentHexKey)) {
-                let visitCount = unitHexVisits.get(currentHexKey);
-                visitCount++;
-                unitHexVisits.set(currentHexKey, visitCount);
-
-                if (visitCount >= 3) {
-                    originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} detected loop. Stopping movement.`);
-                    movedHexUnit.delete(unit);
-                    unit.targetRow = null;
-                    unit.targetCol = null;
-                    unit.movementProgress = 0;
-                    unit.previousRow = unit.row;
-                    unit.previousCol = unit.col;
-                    if (unitMovementTimers.has(unit.id)) {
-                        clearTimeout(unitMovementTimers.get(unit.id));
-                        unitMovementTimers.delete(unit.id);
-                    }
-                    return; // Arrêter le mouvement en cas de boucle
-                }
-            } else {
-                unitHexVisits.set(currentHexKey, 1);
-            }
-        }
-
-        // Mise à jour de la visibilité car l'unité a bougé
-        // Note: updateVisibility() devrait être appelé une seule fois par tick globalement,
-        // mais pour l'instant, nous le mettons ici pour réactivité si une unité individuelle bouge.
-        // Une meilleure approche serait de stocker un drapeau global 'movedThisTick' et de l'appeler à la fin de gameLoop.
-        updateVisibility();
-
-        // Si l'unité est arrivée à destination après ce pas
-        if (unit.row === targetR && unit.col === targetC) {
-            console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army has arrived at destination (${unit.row}, ${unit.col}).`);
-            originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} arrived at final destination (${unit.row}, ${unit.col}) after step.`);
-            movedHexUnit.delete(unit);
-            unit.targetRow = null;
-            unit.targetCol = null;
-            unit.movementProgress = 0;
-            unit.previousRow = unit.row;
-            unit.previousCol = unit.col;
-            if (unitMovementTimers.has(unit.id)) {
-                clearTimeout(unitMovementTimers.get(unit.id));
-                unitMovementTimers.delete(unit.id);
-            }
-            return; // L'unité est arrivée
-        }
-
-        // L'unité doit continuer à bouger : démarrer le timer pour le prochain pas
-        const realTimeForNextStep = gameMinutesNeededForStep * MILLISECONDS_PER_GAME_MINUTE;
-        const timerId = setTimeout(() => moveUnitStep(unit), realTimeForNextStep);
-        unitMovementTimers.set(unit.id, timerId);
-        //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} moved to (${unit.row}, ${unit.col}). Next step in ${realTimeForNextStep.toFixed(0)} ms.`);
+    // Include the center hex itself
+    if (isValid(centerR, centerC, currentMapRows, currentMapCols)) {
+        hexes.add(`${centerR},${centerC}`);
     } else {
-        // Fallback si aucun meilleur hexagone n'est trouvé (ne devrait pas arriver si viableNeighbors n'est pas vide)
-        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}) - fallback block.`);
-        originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). Fallback block.`);
-        movedHexUnit.delete(unit);
-        unit.targetRow = null;
-        unit.targetCol = null;
-        unit.movementProgress = 0;
-        unit.previousRow = unit.row;
-        unit.previousCol = unit.col;
-        if (unitMovementTimers.has(unit.id)) {
-            clearTimeout(unitMovementTimers.get(unit.id));
-            unitMovementTimers.delete(unit.id);
+        // Should not happen if called with valid center, but safety check
+        originalConsoleWarn(`[getHexesInRange] Invalid center coordinates provided: (${centerR}, ${centerC})`);
+        return []; // Return empty array if center is invalid
+    }
+
+
+    while (queue.length > 0) {
+        const { r, c, dist } = queue.shift();
+
+        // If we are within range, explore neighbors
+        if (dist < range) {
+            const neighbors = getNeighbors(r, c, currentMapRows, currentMapCols);
+            for (const [nr, nc] of neighbors) {
+                const neighborKey = `${nr},${nc}`;
+                if (!visited.has(neighborKey) && isValid(nr, nc, currentMapRows, currentMapCols)) {
+                    visited.add(neighborKey);
+                    hexes.add(neighborKey); // Add the neighbor hex to the set
+                    queue.push({ r: nr, c: nc, dist: dist + 1 });
+                }
+            }
         }
     }
+
+    // Convert Set of strings back to array of [r, c] pairs
+    const hexArray = Array.from(hexes).map(key => key.split(',').map(Number));
+    return hexArray;
 }
 
 /**
- * The main game loop: updates time, manages unit movement, detects combat (Blue only), and redraws.
- * Movement is now processed incrementally within this loop based on accumulated game time.
- * Depends on MILLISECONDS_PER_GAME_MINUTE, UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR, ARMY_COLOR_BLUE, ARMY_COLOR_RED, Terrain, UnitType, UNIT_HEALTH from constants.js.
- * Depends on COMBAT_INTERVAL_GAME_MINUTES from constants.js.
- * Depends on calculateMoveDurationGameMinutes from constants.js.
- * Depends on getMovementCost, getUnitAt, getUnitTypeName, getHexDistance, isValid, getNeighbors from utils.js.
- * Depends on drawMapAndUnits, updateVisibility, getCombatRange, getUnitsInvolvedInCombat, calculateTotalStat, resolveCombat, distributeDamage, getHexesInRange, getEffectiveGroupCombatRange.
- * Access global map, currentUnits, currentMapRows, currentMapCols, HEX_SIZE, TerrainColors, selectedUnit, gameTimeInMinutes, lastRealTime, gameLoopInterval, visibleHexes, ARMY_COLOR_BLUE, ARMY_COLOR_RED, UNIT_COMBAT_STATS, UnitType.
- * Access global lastCombatGameTimeInMinutes, combatHexes, playerArmyColor, ws.
- * Utilise originalConsoleLog, cancelAnimationFrame, requestAnimationFrame, performance.now.
+ * Calculates the effective combat range for a group of units involved in a single engagement.
+ * The group's range is the minimum combat range of all non-Cavalry units in the group,
+ * unless a Cavalry unit is present, in which case the range is always 1 (melee).
+ * Depends on getCombatRange from this file (which depends on constants/utils).
+ * Depends on UnitType from constants.js.
+ * Access global UNIT_COMBAT_STATS.
+ * Uses originalConsoleWarn.
  */
-function gameLoop(currentTime) {
-    // If gameLoopInterval is null, it means the loop has been cancelled
-    if (gameLoopInterval === null) {
-        originalConsoleLog("[gameLoop] Loop interval is null, cancelling frame.");
-        return;
-    }
-    // *** NEW : Stop the loop if the game is over ***
-    if (gameOver) {
-        originalConsoleLog("[gameLoop] Game is over, cancelling frame.");
-        // Ensure the final game over state is drawn
-        drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors);
-        return;
-    }
-    // *** END NEW ***
 
+function getEffectiveCombatRange(unit, unitCombatStats) {
+    let factualBaseRange = 0;
 
-    // Ensure game state is sufficiently loaded before processing game logic.
-    // If map or units are missing, just skip the game logic for this tick but keep drawing (or drawing blank).
-    // Check if playerArmyColor is set AND (map and currentUnits are not null/empty) OR playerArmyColor is null (single player)
-    if (!map || !currentUnits || currentUnits.length === 0 || currentMapRows === 0 || currentMapCols === 0) { // Added dimension check
-        // In multiplayer and state is not ready (e.g., Red waiting for sync)
-        drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors); // Draw placeholder or partial state
-        gameLoopInterval = requestAnimationFrame(gameLoop);
-        return; // Skip game logic
-    } else if (!map || !currentUnits || currentUnits.length === 0 || currentMapRows === 0 || currentMapCols === 0) { // Added dimension check
-        // In single player and state is not ready (e.g., before first regeneration)
-        drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors); // Draw placeholder or partial state
-        gameLoopInterval = requestAnimationFrame(gameLoop);
-        return; // Skip game logic
-    }
-    // If we reach here, either playerArmyColor is null and map/units are ready (single player)
-    // OR playerArmyColor is not null and map/units are ready (multiplayer, both clients)
+    // Ensure unit and its type/stats are valid
+    if (unit && unitCombatStats[unit.type]) {
 
+        const terrainAtUnitHex = map[unit.row][unit.col];
 
-    const realTimeElapsed = currentTime - lastRealTime;
-    lastRealTime = currentTime;
-
-    // Update game time in minutes based on real time elapsed
-    const gameMinutesToAdd = (realTimeElapsed / MILLISECONDS_PER_GAME_MINUTE);
-    gameTimeInMinutes += gameMinutesToAdd;
-
-    // Red client does NOT perform combat detection or resolution here nor movement detection
-    // It only executes unit movement based on received orders/syncs and handles local supply healing.
-    // Combat results and eliminations are applied when receiving 'COMBAT_RESULT' messages.
-    // Red relies on Blue's sync to know about combat hexes. combatHexes is updated in handleReceivedStateSync.
-    // No need to clear combatHexes here on Red.
-
-    if (!gameOver && playerArmyColor === ARMY_COLOR_BLUE) {
-        // --- Unit Movement Processing (Event-driven via Timers) ---
-        // Cette partie est responsable de DÉMARRER le mouvement des unités
-        // qui ont une cible et n'ont pas encore de timer actif.
-        // Le mouvement pas-par-pas est géré par la fonction moveUnitStep et ses timers.
-        const unitsEligibleForMovementStart = currentUnits.filter(unit =>
-            unit !== null && unit !== undefined && unit.health > 0 && // Unité vivante
-            unit.targetRow !== null && unit.targetCol !== null && // A une cible
-            !(unit.row === unit.targetRow && unit.col === unit.targetCol) && // N'est pas déjà à la cible
-            !unitMovementTimers.has(unit.id) // N'a pas de timer de mouvement déjà actif
-        );
-
-        unitsEligibleForMovementStart.forEach(unit => {
-            // Démarrer le premier pas pour cette unité.
-            // La fonction moveUnitStep s'occupera d'enchaîner les pas suivants.
-            // On l'appelle directement une première fois pour initier le processus.
-            originalConsoleLog(`[gameLoop] Initiating movement for Unit ID ${unit.id} towards (${unit.targetRow}, ${unit.targetCol}).`);
-            moveUnitStep(unit);
-        });
-
-        // --- Combat Time Tracking and Resolution ---
-        // This section runs ONLY on the Blue client, as it is the combat authority.
-        // Only process combat if the game is NOT over
-        if (gameTimeInMinutes >= lastCombatGameTimeInMinutes + COMBAT_INTERVAL_GAME_MINUTES) {
-            originalConsoleLog(`[gameLoop] ${COMBAT_INTERVAL_GAME_MINUTES} game minutes elapsed. Initiating combat checks (Blue Client).`);
-            // Clear previous combat highlights at the start of a new combat interval
-            combatHexes.clear();
-
-            lastCombatGameTimeInMinutes = gameTimeInMinutes; // Update last combat time *before* resolving combat
-
-            const engagementsProcessedBleu = new Set();
-            const engagementsProcessedRouge = new Set();
-            // Filter units to only include living ones for combat checks
-            let lesBleus = [];
-            let lesRouges = [];
-            currentUnits.forEach(unit => {
-                if (unit !== null && unit !== undefined && unit.health > 0) {
-                    if (unit.armyColor === ARMY_COLOR_BLUE)
-                        lesBleus.push(unit);
-                    else
-                        lesRouges.push(unit);
-                }
-            })
-            
-            let oneCombat = false;
-            if (lesBleus && lesRouges) {
-                // Iterate through all living units to check for engagements FROM them
-                lesBleus.forEach(unitBlue => {
-                    if (unitBlue === null || unitBlue === undefined || unitBlue.health <= 0)
-                        return;
-
-                    // Only initiate checks FROM our units (Blue) towards enemies (Red)
-                    // This simplifies the N^2 check, only need to check Blue units vs Red units.
-                    // Combat logic is symmetric and calculates attack/defense for both sides regardless of who initiates.
-
-                    let attackerParticipatingUnits = new Set();                    
-
-                    let firstDefender = null;
-                    //First, we look for all enemy units within firing range
-                    let defenderParticipatingUnits = new Set();
-                    const hexvoisins = getHexesInRange(unitBlue.row, unitBlue.col, MAX_RANGE); // Check current hex and neighbors for range 1 // Uses game function
-                    voisins = new Set();
-                    voisins.add(unitBlue);
-                    hexvoisins.forEach(pos => {
-                        lesBleus.forEach(unitBlue => {                        
-                            if (unitBlue.row == pos[0] && unitBlue.col == pos[1])
-                                voisins.add(unitBlue);
-                        });
-                    });                    
-                    voisins.forEach(unitBlue => {
-                        const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
-                        lesRouges.forEach(unitRed => {
-                            if (unitRed !== null && unitRed !== undefined && unitRed.health > 0) {
-                                const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
-                                //Unit B is in range, we keep it
-                                if (dst <= rangeBlue) {
-                                    defenderParticipatingUnits.add(unitRed);
-                                    attackerParticipatingUnits.add(unitBlue);
-                                    if (firstDefender == null) {
-                                        firstDefender = unitRed;
-                                    }
-                                }
-                                else {
-                                    //We still check if our unit is threatened by unitRed
-                                    const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
-                                    if (dst <= rangeRed) {
-                                        defenderParticipatingUnits.add(unitRed);
-                                        attackerParticipatingUnits.add(unitBlue);
-                                        if (firstDefender == null) {
-                                            firstDefender = unitRed;
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    });
-
-                    //No threat to this unit
-                    if (defenderParticipatingUnits.size == 0) {                        
-                        return;
-                    }
-                    
-                    oneCombat = true;
-
-                    //We then check for these potential targets, if there other units involved
-                    let loopunit = true;
-                    let newDefenders = defenderParticipatingUnits;
-                    while (loopunit) {           
-                        let newAttackers = new Set();             
-                        newDefenders.forEach(unitRed => {
-                            const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
-                            lesBleus.forEach(unitBlue => {
-                                const unitStillExistsAndAlive = (unitBlue !== null && unitBlue !== undefined && unitBlue.health > 0);
-                                if (unitStillExistsAndAlive && !attackerParticipatingUnits.has(unitBlue)) {
-                                    const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
-                                    //The unit is in range, we keep it
-                                    if (dst <= rangeRed) {
-                                        attackerParticipatingUnits.add(unitBlue);
-                                        newAttackers.add(unitBlue);
-                                    }
-                                }
-                            });
-                        });
-                        if (!newAttackers.size)
-                            loopunit = false;
-                        else {
-                            newDefenders = new Set();
-                            newAttackers.forEach(unitBlue => {
-                                const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
-                                lesRouges.forEach(unitRed => {
-                                    const unitStillExistsAndAlive = (unitRed !== null && unitRed !== undefined && unitRed.health > 0);
-                                    if (unitStillExistsAndAlive && !defenderParticipatingUnits.has(unitRed)) {
-                                        const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
-                                        //The unit is in range, we keep it
-                                        if (dst <= rangeBlue) {
-                                            defenderParticipatingUnits.add(unitRed);
-                                            newDefenders.add(unitRed);
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                        if (!newDefenders)
-                            loopunit = false;
-                    }
-
-                    skip = false;
-                    attackerParticipatingUnits.forEach(unit => {
-                        if (engagementsProcessedBleu.has(unit)) {
-                            skip = true;
-                        }
-                        else {
-                            engagementsProcessedBleu.add(unit);
-                            allUnitInvolvedCombat.add(unit);
-                        }
-                    });
-                    if (skip)
-                        return;
-
-                    const nb = allUnitInvolvedCombat.size; 
-                    defenderParticipatingUnits.forEach(unit => {
-                        if (engagementsProcessedRouge.has(unit)) {
-                            skip = true;
-                        }
-                        else {
-                            engagementsProcessedRouge.add(unit);
-                            allUnitInvolvedCombat.add(unit);
-                        }
-                    });
-                    if (skip)
-                        return;
-
-                    if (nb < allUnitInvolvedCombat.size) {
-                        playTrumpetSound();
-                        ws.send(JSON.stringify({ type: 'PLAY_SOUND' }));
-                    }
-                    
-                    //If the red are in the blue camp
-                    //The red are then the attacker...
-                    let firstAttacker;
-                    if (firstDefender.row < currentMapRows/2) {
-                        const attack = attackerParticipatingUnits;
-                        attackerParticipatingUnits = defenderParticipatingUnits;
-                        defenderParticipatingUnits = attack;
-                        firstAttacker = firstDefender;
-                        firstDefender = unitBlue;
-                    }
-                    else
-                        firstAttacker = unitBlue;
-
-                    // Combat Engagement! Mutual engagement confirmed.
-
-                    // --- Mark hexes for combat highlighting (local display on Blue) ---
-                    // Add all hexes occupied by participating units to the combatHexes set
-                    attackerParticipatingUnits.forEach(unit => {
-                        combatHexes.add(`${unit.row},${unit.col}`);
-                    });
-                    defenderParticipatingUnits.forEach(unit => {
-                        combatHexes.add(`${unit.row},${unit.col}`);
-                    });
-                    // --- END Highlighting ---
-
-
-                    // --- Resolve Combat for this Engagement ---
-                    // originalConsoleLog(`[gameLoop] RESOLVING COMBAT! Engagement between Unit ID ${unitA.id} (${getUnitTypeName(unitA.type)} ${unitA.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}) at (${unitA.row}, ${unitA.col}) and Unit ID ${unitB.id} (${getUnitTypeName(unitB.type)} ${unitB.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}) at (${unitB.row}, ${unitB.col}).`);
-
-                    const stats = evaluateAttackDefense(attackerParticipatingUnits, defenderParticipatingUnits);
-
-                    const totalAttackerAttack = stats.totalStatAttacker;
-                    const totalDefenderDefense = stats.totalStatDefender;
-
-                    // --- Aggregation of Stats ---
-                    originalConsoleLog(`[gameLoop] Aggregated Stats: Total Attacker Attack = ${totalAttackerAttack.toFixed(2)}, Total Defender Defense = ${totalDefenderDefense.toFixed(2)}.`);
-                    // --- END Aggregation of Stats ---
-
-                    // --- Resolve combat and apply damage (locally on Blue) ---
-                    const combatResult = resolveCombat(totalAttackerAttack, totalDefenderDefense); // Uses game function, constants
-                    originalConsoleLog(`[gameLoop] Combat Result: ${combatResult.outcome}. Damage: ${combatResult.damage.toFixed(2)}. Target: ${combatResult.targetSide}.`);
-
-                    // Display combat outcome message to the console div (synced via wrapped console)
-                    const attackerArmyColor = firstAttacker.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'; // Uses constant
-                    const defenderArmyColor = firstDefender.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'; // Uses constant
-                    let outcomeMessage = `Combat at (${firstAttacker.row}, ${firstAttacker.col}) vs (${firstDefender.row}, ${firstDefender.col}): `; // Base message
-
-                    if (combatResult.outcome === 'attacker') {
-                        outcomeMessage += `Victory for the ${attackerArmyColor} army.`;
-                    } else if (combatResult.outcome === 'defender') {
-                        outcomeMessage += `Victory for the ${defenderArmyColor} army.`;
-                    } else {
-                        outcomeMessage += `Draw.`;
-                    }
-                    outcomeMessage += ` Damage applied (${combatResult.targetSide}) : ${combatResult.damage.toFixed(1)}`;
-                    console.log(outcomeMessage); // This goes to console div (synced)
-
-
-                    let unitsEliminatedThisCombatInstance = [];
-                    if (combatResult.damage > 0) {
-                        // Apply damage to the units in the relevant group(s)
-                        if (combatResult.targetSide === 'defender' || combatResult.targetSide === 'both') {
-                            originalConsoleLog(`[gameLoop] Applying ${combatResult.damage.toFixed(2)} damage to units in the Defender camp.`);
-                            const eliminatedDefender = distributeDamage(stats.defenseInBattle, combatResult.damage); // Uses game function
-                            unitsEliminatedThisCombatInstance.push(...eliminatedDefender);
-                        }
-                        if (combatResult.targetSide === 'attacker' || combatResult.targetSide === 'both') {
-                            originalConsoleLog(`[gameLoop] Applying ${combatResult.damage.toFixed(2)} damage to units in the Attacker camp.`);
-                            const eliminatedAttacker = distributeDamage(stats.attackInBattle, combatResult.damage); // Uses game function
-                            unitsEliminatedThisCombatInstance.push(...eliminatedAttacker);
-                        }
-                    }
-                    // --- END Resolve combat and apply damage ---
-
-
-                    // *** NEW : Check for General elimination after this combat instance ***
-                    if (!gameOver && unitsEliminatedThisCombatInstance.length > 0) { // Check if game is not already over by a previous instance
-                        const eliminatedGeneral = unitsEliminatedThisCombatInstance.find(unit => unit && unit.type === UnitType.GENERAL); // Uses constant
-
-                        if (eliminatedGeneral) {
-                            originalConsoleLog(`[gameLoop] Blue Client: General eliminated during combat instance! Unit ID: ${eliminatedGeneral.id}, Army: ${eliminatedGeneral.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'}`);
-
-                            if (eliminatedGeneral.armyColor === ARMY_COLOR_BLUE) { // Blue's General eliminated
-                                if (playerArmyColor === ARMY_COLOR_BLUE)
-                                    console.log("The Blue General has been eliminated! You lost");
-                                else
-                                    console.log("The Blue General has been eliminated! You won");
-
-                                endGame(ARMY_COLOR_RED); // Trigger game over state for losing on Blue side
-
-                                // Send GAME_OVER message to Red client via server
-                                if (ws && ws.readyState === WebSocket.OPEN) {
-                                    ws.send(JSON.stringify({ type: 'GAME_OVER', outcome: 'red' }));
-                                    originalConsoleLog("[gameLoop] Blue Client: Sent GAME_OVER (lose) message to server.");
-                                }
-
-                            } else if (eliminatedGeneral.armyColor === ARMY_COLOR_RED) { // Red's General eliminated
-                                if (playerArmyColor === ARMY_COLOR_RED)
-                                    console.log("The Red General has been eliminated! You lost");
-                                else
-                                    console.log("The Red General has been eliminated! You won");
-
-                                endGame(ARMY_COLOR_BLUE); // Trigger game over state for winning on Blue side
-
-                                // Send GAME_OVER message to Red client via server
-                                if (ws && ws.readyState === WebSocket.OPEN) {
-                                    ws.send(JSON.stringify({ type: 'GAME_OVER', outcome: 'blue' }));
-                                    originalConsoleLog("[gameLoop] Blue Client: Sent GAME_OVER (win) message to server.");
-                                }
-                            }                            
-                            // If a general was eliminated and game is over, no need to process more combat instances in this interval
-                            return; // Exit the forEach for unitB
-                        }
-                        updateVisibility();
-                    }
-                    // *** END NEW : Check for General elimination ***
-
-
-                    // *** Send combat results to the server/Red ***
-                    // Send state of all participating units and IDs of eliminated units
-                    const affectedUnits = new Set([...attackerParticipatingUnits, ...defenderParticipatingUnits]);
-                    const combatUpdate = {
-                        type: 'COMBAT_RESULT',
-                        // Send just essential state for affected units that are STILL ALIVE locally
-                        updatedUnits: Array.from(affectedUnits).filter(u => u && u.health > 0).map(unit => ({
-                            id: unit.id,
-                            health: unit.health,
-                            row: unit.row, // Include position
-                            col: unit.col
-                        })),
-                        eliminatedUnitIds: unitsEliminatedThisCombatInstance.map(u => u.id) // Send the IDs of units eliminated by this combat instance
-                    };
-
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify(combatUpdate));
-                        // originalConsoleLog("[gameLoop] Sent COMBAT_RESULT update to server."); // Chatty
-                    } else {
-                        console.warn("Server connection not established. Combat results not synchronized.");
-                    }
-                    // *** END Sending results ***
-
-
-                    // *** Immediate elimination of units after combat instance (Blue side) ***
-                    // Filter the main currentUnits list to remove units that now have health <= 0
-                    // This happens AFTER checking for General elimination within this instance
-                    const unitsBeforeFilter = currentUnits.length;
-                    unitOnId.clear();
-                    currentUnits = currentUnits.filter(unit => unit && unit.health > 0 && unitOnId.set(unit.id, unit));
-
-                    if (unitsBeforeFilter !== currentUnits.length) {
-                        originalConsoleLog(`[gameLoop] Eliminated ${unitsBeforeFilter - currentUnits.length} units locally after combat instance. Total remaining: ${currentUnits.length}.`);
-                    }
-                    // *** END Immediate elimination ***
-
-
-
-                    // If game is over (checked within the General elimination block), break out of further combat checks
-                    if (gameOver) return; // Exit the forEach for unitA
-                });                
+        // Get the base range defined in UNIT_COMBAT_STATS
+        const baseRange = unitCombatStats[unit.type].range.base; 
+        if (terrainAtUnitHex === Terrain.HILL) {
+            const hillRange = unitCombatStats[unit.type].range?.hill; // Use optional chaining
+            if (hillRange !== undefined && hillRange !== null && hillRange !== Infinity)
+                factualBaseRange = hillRange;
+            else
+                factualBaseRange = baseRange;
+        } else {
+            if (terrainAtUnitHex === Terrain.MOUNTAIN) {
+                const mountainRange = unitCombatStats[unit.type].range?.mountain; // Use optional chaining
+                if (mountainRange !== undefined && mountainRange !== null && mountainRange !== Infinity)
+                    factualBaseRange = mountainRange;
+                else
+                    factualBaseRange = baseRange;
             }
-            if (oneCombat == false)
-                allUnitInvolvedCombat.clear();
+            else
+                factualBaseRange = baseRange;
+        }
+    }
+    return factualBaseRange;
+}
+
+/**
+ * Draws the entire scene: map, units, highlights, and clock, respecting fog of war.
+ * Depends on getHexCenter, getUnitAt from utils.js.
+ * Depends on HEX_SIZE, TerrainColors, UNIT_ARMY_INDICATOR_OFFSET_X, UNIT_ARMY_INDICATOR_OFFSET_Y, UNIT_ARMY_INDICATOR_RADIUS, FOG_COLOR, UNIT_HEALTH, COMBAT_HIGHLIGHT_COLOR from constants.js.
+ * Depends on Terrain (constant).
+ * Access global map, currentUnits, selectedUnit, gameTimeInMinutes, visibleHexes, combatHexes, playerArmyColor.
+ * Calls drawHex, drawUnitIcon, drawClock.
+ */
+function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
+    // If map or context is not available, just clear the canvas
+    if (!ctx || !canvas || !map || !currentUnits) { // Added canvas check
+        if (ctx && canvas) { // Added canvas check
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Maybe draw a placeholder if no map/units?
+            if (canvas && ctx) { // Ensure canvas and context are available for drawing placeholder
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = '20px sans-serif';
+                ctx.fillStyle = '#333';
+                let message = "Connect to the server to start";
+                message = playerArmyColor === ARMY_COLOR_BLUE ? "Waiting for Red player..." : "Waiting for initial game state...";
+                ctx.fillText(message, canvas.width / 2, canvas.height / 2);
+            }
+        }
+        return;
+    }
+
+    // Clear the canvas before drawing
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // Uses global canvas
+
+    const rows = map.length;
+    const cols = map[0].length;
+
+    // Draw the map terrain and units, respecting fog of war
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const { x, y } = getHexCenter(r, c, size); // Uses utils function, size from parameter
+
+            // Check if the hex is visible to the local player
+            const isVisible = visibleHexes && visibleHexes[r] && visibleHexes[r][c]; // Uses global visibleHexes
+
+            if (isVisible) {
+                // Draw visible hex (terrain)
+                const terrainType = map[r][c]; // Uses global map
+                let displayTerrainType = terrainType;
+                if (displayTerrainType < 0) {
+                    displayTerrainType = Terrain.FLAT; // Use flat for temp/unassigned states, uses constant
+                }
+                const color = terrainColors[displayTerrainType]; // Uses terrainColors from parameter
+                drawHex(ctx, x, y, size, color); // Uses drawing function
+
+                // *** Draw combat highlight if the hex is visible and in combat ***
+                // This highlight is based on the local combatHexes set, which is populated
+                // on the Blue client during combat resolution, and potentially synced (TBD exact sync).
+                const hexKey = `${r},${c}`;
+                const isInCombat = combatHexes.has(hexKey); // Uses the global combatHexes variable
+                if (isInCombat) {
+                    // Draw a semi-transparent red layer over the terrain
+                    drawHex(ctx, x, y, size, COMBAT_HIGHLIGHT_COLOR); // Uses the color constant and drawing function
+                }
+                // *** END NEW ***
+
+
+                // Draw unit if present at this visible hex
+                const unitAtHex = getUnitAt(r, c, currentUnits.filter(u => u !== null && u !== undefined), "drawMapAndUnits - unit check"); // Use filtered list
+                if (unitAtHex) {
+                    if (unitAtHex.type === UnitType.GENERAL && !isInCombat) {
+                        drawHex(ctx, x, y, size, GENERAL_HEX_COLOR);
+                    }
+                    drawUnitIcon(ctx, x, y, unitAtHex.type, unitAtHex.armyColor, size); // Uses drawing function
+                    // Draw movement indicator if unit has a target destination and is not there yet
+                    // Draw for both friendly and enemy units if visible
+                    if (unitAtHex.targetRow !== null && unitAtHex.targetCol !== null && (unitAtHex.row !== unitAtHex.targetRow || unitAtHex.col !== unitAtHex.col)) {
+                        const dotRadius = size * 0.15;
+                        const dotX = x + size * 0.4;
+                        const dotY = y + size * 0.4;
+
+                        ctx.fillStyle = '#0000FF'; // Blue color for movement indicator (can be changed if needed)
+                        ctx.beginPath();
+                        ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    // Draw army indicator based on armyColor (top-left)
+                    const indicatorX = x + UNIT_ARMY_INDICATOR_OFFSET_X; // Uses constant
+                    const indicatorY = y + UNIT_ARMY_INDICATOR_OFFSET_Y; // Uses constant
+
+                    ctx.fillStyle = unitAtHex.armyColor; // Use the unit's army color
+                    ctx.beginPath();
+                    ctx.arc(indicatorX, indicatorY, UNIT_ARMY_INDICATOR_RADIUS, 0, Math.PI * 2); // Uses constant
+                    ctx.fill();
+                    // Optional: Add a small border for visibility
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+
+                    // *** Draw Health Bar/Indicator (simple) ***
+                    const healthBarHeight = 3;
+                    const healthBarWidth = size * 1.0; // Proportionate to hex size
+                    const healthBarX = x - healthBarWidth / 2;
+                    const healthBarY = y + size * 0.5 - healthBarHeight; // Below the unit icon
+
+                    const maxHealth = UNIT_HEALTH[unitAtHex.type] !== undefined ? UNIT_HEALTH[unitAtHex.type] : 1; // Uses constant
+                    const currentHealth = Math.max(0, unitAtHex.health); // Ensure health isn't drawn below 0
+
+                    const healthPercentage = currentHealth / maxHealth;
+
+                    // Draw background (red usually)
+                    ctx.fillStyle = '#FF0000'; // Red
+                    ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+
+                    // Draw health bar (green usually)
+                    ctx.fillStyle = '#00FF00'; // Green
+                    ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercentage, healthBarHeight);
+
+                    // Draw a border around the health bar
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+
+                    // *** END Draw Health Bar/Indicator ***
+
+                }
+
+            } else {
+                // Draw fogged hex - ONLY draw fog if playerArmyColor is defined (multiplayer)
+                // In single player, visibleHexes is always true.
+                drawHex(ctx, x, y, size, FOG_COLOR); // Use FOG_COLOR constant, drawing function
+            }
+        }
+    }
+
+    if (messageEndGame != null) {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '40px sans-serif';
+
+        if (messageEndGame.includes("VICTORY"))
+            playVictoryMusic();
+        else
+            playDefeatMusic();
+
+        ctx.fillStyle = 'rgba(0, 200, 0, 0.8)'; // Green for victory message
+        // Draw a background rectangle for the message
+        const textWidth = ctx.measureText(messageEndGame).width;
+        const padding = 30;
+        const rectX = canvas.width / 2 - (textWidth / 2 + padding);
+        const rectY = canvas.height / 2 - (40 / 2 + padding); // 40 is font size
+        const rectWidth = textWidth + padding * 2;
+        const rectHeight = 40 + padding * 2;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; // Semi-transparent white background
+        ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
+
+        // Draw the message text
+        ctx.fillStyle = '#008000'; // Darker green for text
+        ctx.fillText(messageEndGame, canvas.width / 2, canvas.height / 2);
+        ctx.strokeStyle = '#000'; // Black border
+        ctx.lineWidth = 2;
+        ctx.strokeText(messageEndGame, canvas.width / 2, canvas.height / 2);
+    }
+
+    // --- Add Highlighting Logic Here ---
+    // Highlight the selected unit's hex ONLY if it's visible and NOT currently in combat (combat highlight takes precedence)
+    // And only if the selected unit belongs to the local player's army
+    if (!gameOver && selectedUnits && selectedUnits.length > 0 && visibleHexes) {
+        // We have selected units, the game is not over, and visibleHexes exists.
+        // Now, loop through each selected unit and apply specific checks.
+
+        for (const unit of selectedUnits) {
+            // Check if the current unit in the loop belongs to the player's army (or playerArmyColor is null)
+            // AND if the unit's hex is visible (checking for row and column existence in visibleHexes)
+            // AND if the unit's hex is NOT currently in combat
+            if (unit.armyColor === playerArmyColor&&
+                visibleHexes[unit.row] &&
+                visibleHexes[unit.row][unit.col] &&
+                !combatHexes.has(`${unit.row},${unit.col}`)) {
+
+                // Uses utils function, current 'unit' from loop, size from parameter
+                const { x: selectedX, y: selectedY } = getHexCenter(unit.row, unit.col, size);
+
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.5)'; // Semi-transparent yellow highlight
+
+                // Uses drawing function
+                drawHex(ctx, selectedX, selectedY, size, ctx.fillStyle);
+            }
+        }
+    }
+    // --- End Highlighting Logic ---
+
+    // --- Draw Chat Message ---
+    // Check if messageChat is not null or empty
+    if (messageChat && messageChat.trim() !== '') {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '20px sans-serif'; // Set font size to 20px
+
+        const messageX = canvas.width / 2;
+        let messageY;
+
+        // Determine vertical position based on playerArmyColor
+        if (playerArmyColor === ARMY_COLOR_BLUE) {
+            messageY = canvas.height * 0.2; // Near the top
+        } else if (playerArmyColor === ARMY_COLOR_RED) {
+            messageY = canvas.height * 0.8; // Near the bottom
+        } else {
+            // Default to center if playerArmyColor is not set
+            messageY = canvas.height / 2;
         }
 
-        // *** Final HP Recovery Phase by Supply (End of Tick) ***
-        const unitsForSupplyCheck = currentUnits.filter(unit => unit !== null && unit !== undefined && unit.health > 0);
+        // Measure text width for background rectangle
+        const textWidth = ctx.measureText(messageChat).width;
+        const textHeight = 20; // Approximate height based on font size
+        const padding = 10; // Padding around the text
 
-        unitsForSupplyCheck.forEach(unit => {
-            if (!unit || unit.health <= 0) return;
+        // Calculate background rectangle position centered around the message text position (messageX, messageY)
+        const rectX = messageX - (textWidth / 2 + padding);
+        // Adjust rectY calculation to center the rectangle vertically around messageY
+        const rectY = messageY - (textHeight / 2 + padding);
+        const rectWidth = textWidth + padding * 2;
+        const rectHeight = textHeight + padding * 2;
 
-            const maxHealth = UNIT_HEALTH[unit.type] !== undefined ? UNIT_HEALTH[unit.type] : 1; // Uses constant
-            if (unit.health >= maxHealth) {
-                // originalConsoleLog(`[gameLoop] Unit ID ${unit.id} is already at full health.`); // Chatty
-                return; // Skip if already at full health
-            }
+        // Draw yellow background rectangle
+        ctx.fillStyle = 'rgba(255, 255, 0, 0.7)'; // Semi-transparent yellow
+        ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
 
-            // Find if there is a SUPPLY unit *of the same army* in the same hex or adjacent hexes
-            const hexesToCheckForSupply = getHexesInRange(unit.row, unit.col, 1); // Check current hex and neighbors for range 1 // Uses game function
+        // Optional: Add a border to the background
+        ctx.strokeStyle = '#000'; // Black border
+        ctx.lineWidth = 1;
+        ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
 
-            let supplyUnitFound = false;
-            for (const hex of hexesToCheckForSupply) {
-                const [supplyR, supplyC] = hex;
-                // Ensure hex is valid before checking units
-                if (!isValid(supplyR, supplyC, currentMapRows, currentMapCols)) continue;
 
-                const unitsAtSupplyHex = unitsForSupplyCheck.filter(u => u.row === supplyR && u.col === supplyC && u.armyColor === unit.armyColor);
+        ctx.fillStyle = '#000000'; // Black color for chat message text for better contrast on yellow
+        // Optional: Add a subtle shadow for readability
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 5;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
 
-                if (unitsAtSupplyHex.find(u => u.type === UnitType.SUPPLY)) { // Uses constant
-                    supplyUnitFound = true;
-                    break; // Found a supply unit in range, no need to check further hexes
-                }
-            }
+        // Draw the message centered at the calculated pixel coordinates
+        ctx.fillText(messageChat, messageX, messageY);
 
-            if (supplyUnitFound && unit.type !== UnitType.SUPPLY) {
-                // Healing amount scaled by game minutes elapsed
-                const healingRatePerGameMinute = maxHealth * 0.005; // Example: heal 0.5% of max HP per game minute
-                const healingAmount = healingRatePerGameMinute * gameMinutesToAdd; // Scale by actual elapsed game minutes
-
-                unit.health = Math.min(maxHealth, unit.health + healingAmount);
-            }
-        });
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
     }
-    // *** END Final HP Recovery Phase ***
+    // --- End Draw Chat Message ---
 
+    // Dessiner le rectangle de sélection si le glisser-déposer est en cours
+    if (isDragging) {
+        const x = Math.min(dragStartX, dragCurrentX);
+        const y = Math.min(dragStartY, dragCurrentY);
+        const width = Math.abs(dragStartX - dragCurrentX);
+        const height = Math.abs(dragStartY - dragCurrentY);
 
-    // Redraw the entire map and units based on their current positions and visibility.
-    // This redraw happens every frame (tick).
-    drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors);
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)'; // Couleur verte semi-transparente
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
 
-
-    // Request the next frame using requestAnimationFrame, only if game is NOT over
-    if (!gameOver) {
-        gameLoopInterval = requestAnimationFrame(gameLoop);
-    } else {
-        originalConsoleLog("[gameLoop] Game is over, not requesting next frame.");
-        // The final draw with the game over message is handled in endGame/handleGameOver.
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Remplissage vert clair semi-transparent
+        ctx.fillRect(x, y, width, height);
     }
+
+    if (firstDraw && playerArmyColor == ARMY_COLOR_RED) {
+        firstDraw = false;
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+    // Draw the game clock (always visible)
+    //drawClock(ctx, gameTimeInMinutes); // Use global gameTimeInMinutes, drawing function
 }
+
