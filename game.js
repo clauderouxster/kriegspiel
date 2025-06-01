@@ -21,7 +21,7 @@ let unitOnId = new Map();
 let firstDraw = true;
 // Ajoutez cette variable globale en haut de votre script, près de unitMovementTimers
 const combatTimers = new Map(); // Stocke les timers pour les engagements de combat en cours
-
+const nbUnitCentered = new Map();
 
 let audioContext;
 let trumpetBuffer;
@@ -1719,7 +1719,8 @@ function getHexesInRange(centerR, centerC, range) {
     if (range == 1)
         return neighbors;
 
-    const visited = new Set();
+    const visited = new Set(`${centerR},${centerC}`);
+    const hexes = [];
     let currentneighbors = neighbors;
     rg = 1;
     while (rg < range) {
@@ -1727,12 +1728,11 @@ function getHexesInRange(centerR, centerC, range) {
         for (const [nr, nc] of currentneighbors) {
             const newneighbors = getNeighbors(nr, nc, currentMapRows, currentMapCols);
             newneighbors.forEach(u => {
-                if (u[0] == centerR && u[1] == centerC)
-                    return;
                 const neighborKey = `${u[0]},${u[1]}`;
                 if (visited.has(neighborKey) || !isValid(u[0], u[1], currentMapRows, currentMapCols))
                     return;
                 visited.add(neighborKey);
+                hexes.push(u);
                 allneighbors.push(u);
             });
         }
@@ -1740,8 +1740,7 @@ function getHexesInRange(centerR, centerC, range) {
         rg++;
     }
 
-    const hexArray = Array.from(visited).map(key => key.split(',').map(Number));
-    return hexArray;
+    return hexes;
 }
 
 
@@ -2694,6 +2693,15 @@ function setupCanvasEventListeners() {
     canvas.addEventListener('mouseup', handleCanvasMouseUp);    
 }
 
+function updateNbCentered() {
+    if (nbUnitCentered.size == 0) {
+        for (let i = 1; i < 10; i++) {
+            const hexes = getHexesInRange(20, 20, i);
+            nbUnitCentered.set(i, 1+hexes.length);
+        }
+    }
+}
+
 function handleCanvasClick(event) {
     // Ensure game state is ready for interaction (multiplayer check is now inside for placing orders)
     if (!canvas || !map || !currentUnits || currentMapRows === 0 || currentMapCols === 0 || !visibleHexes) { // Added map and visibleHexes check
@@ -2868,19 +2876,22 @@ function handleCanvasClick(event) {
                             return b.row - a.row;
                         });
 
+                        updateNbCentered();
+                        let freehexes;
+                        for (let i = 1; i < 10; i++) {
+                            if (unitsToOrder.length <= nbUnitCentered.get(i)) {
+                                freehexes = getHexesInRange(baseTargetR, baseTargetC, i);
+                                freehexes.unshift([baseTargetR, baseTargetC]);
+                                break;
+                            }
+                        }
+
                         const unitsSuccessfullyOrdered = [];
-                        let indexRow = 0;
-                        let indexCol = 0; 
+                        let index = 0;
                         unitsToOrder.forEach((unit) => {
                             // Calculate the individual target hex with simple column displacement
-                            const targetR = baseTargetR + indexRow;
-                            const targetC = baseTargetC + indexCol;
-                            if (indexCol == 3) {
-                                indexRow++;
-                                indexCol = 0;                                
-                            }
-                            else
-                                indexCol++;
+                            const [targetR, targetC] = freehexes[index];
+                            index++;
 
                             // Check validity of the individual target hex
                             //const isTargetValidLocation = isValid(targetR, targetC, currentMapRows, currentMapCols);

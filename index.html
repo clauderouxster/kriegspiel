@@ -353,7 +353,11 @@
                 return currentHost; // Use the same host for WebSocket
             }
             // If we're on localhost or local IP
-            else if (currentHost.includes('localhost') || currentHost.startsWith('127.') || currentHost.startsWith('192.168.')) {
+            else if (currentHost.startsWith('192.168.')) {
+                const newHost = currentHost.replace("5500", "6060");
+                return newHost;
+            }
+            else if (currentHost.includes('localhost') || currentHost.startsWith('127.')) {
                 return 'localhost:6060'; // Default local development
             }
             // Fallback
