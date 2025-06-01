@@ -50,17 +50,15 @@ function getNeighbors(r, c, rows, cols) {
     
     // Offsets for pointy-top hexes with odd-row staggering
     // Directions: up-left, up-right, left, right, down-left, down-right
-    const dr_even = [-1, -1, 0, 0, 1, 1];
-    const dc_even = [0, 1, -1, 1, 0, 1];
-    const dr_odd = [-1, -1, 0, 0, 1, 1];
-    const dc_odd = [-1, 0, -1, 1, -1, 0];
-
-    const dr = r % 2 === 0 ? dr_even : dr_odd;
-    const dc = r % 2 === 0 ? dc_even : dc_odd;
+    let dr;
+    if (r % 2 == 1)
+        dr = [[-1,0], [-1,1], [0,1], [1,1], [1,0], [0,-1]];
+    else
+        dr = [[-1,-1], [-1,0], [0,1], [1,0], [1,-1], [0,-1]];
 
     for (let i = 0; i < 6; i++) {
-        const neighborR = r + dr[i];
-        const neighborC = c + dc[i];
+        const neighborR = r + dr[i][0];
+        const neighborC = c + dr[i][1];
         if (isValid(neighborR, neighborC, rows, cols)) {
             neighbors.push([neighborR, neighborC]);
         }

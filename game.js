@@ -927,11 +927,14 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
         // We have selected units, the game is not over, and visibleHexes exists.
         // Now, loop through each selected unit and apply specific checks.
 
+        // Add this at the beginning of the drawMapAndUnits function, or where you define global variables
+        let combatRangeHexes = new Set();
+
         for (const unit of selectedUnits) {
             // Check if the current unit in the loop belongs to the player's army (or playerArmyColor is null)
             // AND if the unit's hex is visible (checking for row and column existence in visibleHexes)
             // AND if the unit's hex is NOT currently in combat
-            if (unit.armyColor === playerArmyColor&&
+            if (unit.armyColor === playerArmyColor &&
                 visibleHexes[unit.row] &&
                 visibleHexes[unit.row][unit.col] &&
                 !combatHexes.has(`${unit.row},${unit.col}`)) {
@@ -943,8 +946,40 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
 
                 // Uses drawing function
                 drawHex(ctx, selectedX, selectedY, size, ctx.fillStyle);
+
+                // --- NEW: Draw reachable hexes for selected unit ---
+                // Ensure UNIT_COMBAT_STATS is accessible globally or passed as argument
+                if (typeof UNIT_COMBAT_STATS !== 'undefined') {
+                    const unitCombatRange = getEffectiveCombatRange(unit, UNIT_COMBAT_STATS);
+                    const reachableHexes = getHexesInRange(unit.row, unit.col, unitCombatRange);
+
+                    // Add reachable hexes to the set
+                    reachableHexes.forEach(hex => {
+                        const [r, c] = hex;
+                        // Only add to combatRangeHexes if it's visible and not already in combatHexes
+                        if (visibleHexes[r] && visibleHexes[r][c] && !combatHexes.has(`${r},${c}`)) {
+                            combatRangeHexes.add(`${r},${c}`);
+                        }
+                    });
+                }
+                // --- END NEW ---
             }
         }
+        // --- NEW: Draw the combat range indication for all selected units ---
+        // After iterating through all selected units and populating combatRangeHexes
+        combatRangeHexes.forEach(hexKey => {
+            const [r, c] = hexKey.split(',').map(Number);
+            if (visibleHexes[r] && visibleHexes[r][c]) { // Ensure it's still visible
+                const { x, y } = getHexCenter(r, c, size);
+                const dotRadius = size * 0.1; // Small dot in the center of the hex
+
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.6)'; // Semi-transparent cyan color for range indication
+                ctx.beginPath();
+                ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+        // --- END NEW ---
     }
     // --- End Highlighting Logic ---
 
@@ -1362,8 +1397,8 @@ function updateDimensionsAndDraw() {
  * Uses originalConsoleWarn.
  */
 
-function getEffectiveCombatRange(unit, unitCombatStats, unitTypeConstants) {
-    let minBaseRange = -1;
+function getEffectiveCombatRange(unit, unitCombatStats) {
+    let minBaseRange = 0;
 
     // Ensure unit and its type/stats are valid
     if (unit && unitCombatStats[unit.type]) {
@@ -1405,7 +1440,7 @@ function evaluateAttackDefense(attacker, defender) {
     //First we check that each unit is in range
     //cavalry could be part of a group but not be in range of any other units
     attacker.forEach(unitA => {
-        const rangeA = getEffectiveCombatRange(unitA, UNIT_COMBAT_STATS, UnitType);
+        const rangeA = getEffectiveCombatRange(unitA, UNIT_COMBAT_STATS);
         defender.forEach(unitB => {
             const dst = getHexDistance(unitA.row, unitA.col, unitB.row, unitB.col);
             //Unit B is in range, we keep it
@@ -1417,7 +1452,7 @@ function evaluateAttackDefense(attacker, defender) {
     });
 
     defender.forEach(unitB => {
-        const rangeB = getEffectiveCombatRange(unitB, UNIT_COMBAT_STATS, UnitType);
+        const rangeB = getEffectiveCombatRange(unitB, UNIT_COMBAT_STATS);
         attacker.forEach(unitA => {
             const dst = getHexDistance(unitA.row, unitA.col, unitB.row, unitB.col);
             //Unit A is in range, we keep it
@@ -1678,7 +1713,7 @@ function updateVisibility() {
  * Depends on getNeighbors, isValid from utils.js.
  * Access global currentMapRows, currentMapCols.
  */
-function getHexesInRange(centerR, centerC, range) {
+function getHexesInRange_old(centerR, centerC, range) {
     const hexes = new Set();
     const queue = [{ r: centerR, c: centerC, dist: 0 }];
     const visited = new Set(`${centerR},${centerC}`);
@@ -1712,6 +1747,34 @@ function getHexesInRange(centerR, centerC, range) {
 
     // Convert Set of strings back to array of [r, c] pairs
     const hexArray = Array.from(hexes).map(key => key.split(',').map(Number));
+    return hexArray;
+}
+
+function getHexesInRange(centerR, centerC, range) {
+    const neighbors = getNeighbors(centerR, centerC, currentMapRows, currentMapCols);
+    if (range == 1)
+        return neighbors;
+
+    const visited = new Set(`${centerR},${centerC}`);
+    let currentneighbors = neighbors;
+    rg = 1;
+    while (rg < range) {
+        let allneighbors = [];
+        for (const [nr, nc] of currentneighbors) {
+            const newneighbors = getNeighbors(nr, nc, currentMapRows, currentMapCols);
+            newneighbors.forEach(u => {
+                const neighborKey = `${u[0]},${u[1]}`;
+                if (visited.has(neighborKey) || !isValid(u[0], u[1], currentMapRows, currentMapCols))
+                    return;
+                visited.add(neighborKey);
+                allneighbors.push(u);
+            });
+        }
+        currentneighbors = allneighbors;
+        rg++;
+    }
+
+    const hexArray = Array.from(visited).map(key => key.split(',').map(Number));
     return hexArray;
 }
 
@@ -2068,7 +2131,7 @@ async function resolveCombatEngagement(combatId, initialAttackerUnits, initialDe
 
     // Fonction d'aide pour vérifier si une unité est à portée de toute unité de l'armée adverse dans cet engagement
     const isInRangeOfOpponent = (unit, opposingUnits) => {
-        const unitRange = getEffectiveCombatRange(unit, UNIT_COMBAT_STATS, UnitType);
+        const unitRange = getEffectiveCombatRange(unit, UNIT_COMBAT_STATS);
         for (const opponent of opposingUnits) {
             if (getHexDistance(unit.row, unit.col, opponent.row, opponent.col) <= unitRange) {
                 return true;
@@ -2230,7 +2293,7 @@ function gameLoop(currentTime) {
                         });
                     });                    
                     voisins.forEach(unitBlue => {
-                        const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
+                        const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS);
                         lesRouges.forEach(unitRed => {
                             if (unitRed !== null && unitRed !== undefined && unitRed.health > 0) {
                                 const dst = getHexDistance(unitBlue.row, unitBlue.col, unitRed.row, unitRed.col);
@@ -2244,7 +2307,7 @@ function gameLoop(currentTime) {
                                 }
                                 else {
                                     //We still check if our unit is threatened by unitRed
-                                    const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
+                                    const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS);
                                     if (dst <= rangeRed) {
                                         potentialDefenderUnits.add(unitRed);
                                         potentialAttackerUnits.add(unitBlue);
@@ -2268,7 +2331,7 @@ function gameLoop(currentTime) {
                     while (loopunit) {           
                         let newAttackers = new Set();             
                         newDefenders.forEach(unitRed => {
-                            const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS, UnitType);
+                            const rangeRed = getEffectiveCombatRange(unitRed, UNIT_COMBAT_STATS);
                             lesBleus.forEach(unitBlue => {
                                 const unitStillExistsAndAlive = (unitBlue !== null && unitBlue !== undefined && unitBlue.health > 0);
                                 if (unitStillExistsAndAlive && !potentialAttackerUnits.has(unitBlue)) {
@@ -2286,7 +2349,7 @@ function gameLoop(currentTime) {
                         else {
                             newDefenders = new Set();
                             newAttackers.forEach(unitBlue => {
-                                const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS, UnitType);
+                                const rangeBlue = getEffectiveCombatRange(unitBlue, UNIT_COMBAT_STATS);
                                 lesRouges.forEach(unitRed => {
                                     const unitStillExistsAndAlive = (unitRed !== null && unitRed !== undefined && unitRed.health > 0);
                                     if (unitStillExistsAndAlive && !potentialDefenderUnits.has(unitRed)) {
