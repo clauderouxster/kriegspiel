@@ -1363,38 +1363,34 @@ function updateDimensionsAndDraw() {
  */
 
 function getEffectiveCombatRange(unit, unitCombatStats, unitTypeConstants) {
-    let minBaseRange = 0;
-    let hasCavalry = false;
+    let minBaseRange = -1;
 
     // Ensure unit and its type/stats are valid
     if (unit && unitCombatStats[unit.type]) {
-        if (unit.type === unitTypeConstants.CAVALRY) {
-            hasCavalry = true;
-        }
+
+        const terrainAtUnitHex = map[unit.row][unit.col];
 
         // Get the base range defined in UNIT_COMBAT_STATS
-        const baseRange = unitCombatStats[unit.type].range?.base; // Use optional chaining
-
-        if (baseRange !== undefined && baseRange !== null && baseRange !== Infinity) {
-            minBaseRange = Math.max(minBaseRange, baseRange);
+        const baseRange = unitCombatStats[unit.type].range.base; 
+        if (terrainAtUnitHex === Terrain.HILL) {
+            const hillRange = unitCombatStats[unit.type].range?.hill; // Use optional chaining
+            if (hillRange !== undefined && hillRange !== null && hillRange !== Infinity)
+                minBaseRange = hillRange;
+            else
+                minBaseRange = baseRange;
         } else {
-            // If a unit has an undefined/null/Infinity base range, treat it as having 0 range for the group min
-            minBaseRange = Math.max(minBaseRange, 0);
+            if (terrainAtUnitHex === Terrain.MOUNTAIN) {
+                const mountainRange = unitCombatStats[unit.type].range?.mountain; // Use optional chaining
+                if (mountainRange !== undefined && mountainRange !== null && mountainRange !== Infinity)
+                    minBaseRange = mountainRange;
+                else
+                    minBaseRange = baseRange;
+            }
+            else
+                minBaseRange = baseRange;
         }
-    } else if (unit) { // Check if unit is not null/undefined before accessing properties
-        // Treat invalid units as contributing 0 to the minimum range calculation
-        minBaseRange = Math.max(minBaseRange, 0);
     }
-
-    // Apply the Cavalry rule: if any Cavalry is present, the group's effective range is 1 (melee)
-    //if (hasCavalry) {
-    // originalConsoleLog("[getEffectiveGroupCombatRange] Cavalry detected in group, effective range is 1.");
-    //   return 1;
-    //}
-
-    // Return the minimum base range found among non-Cavalry units, or 0 if no valid ranges were found
-    // originalConsoleLog(`[getEffectiveGroupCombatRange] No Cavalry. Minimum base range in group: ${minBaseRange === Infinity ? 0 : minBaseRange}.`);
-    return minBaseRange === Infinity ? 0 : minBaseRange;
+    return minBaseRange;
 }
 
 
@@ -1610,17 +1606,15 @@ function updateVisibility() {
 
 
             // Apply terrain bonus for Infantry and Artillery (and Artillery combat range?)
-            if (unitType === UnitType.INFANTERY || unitType === UnitType.ARTILLERY) { // Uses constants
-                // Assuming VISION_RANGES structure has hill_mountain for these types
-                if (terrainAtUnitHex === Terrain.HILL || terrainAtUnitHex === Terrain.MOUNTAIN) { // Uses constants
-                    // Check if hill_mountain range is defined, otherwise use base
-                    visionRange = VISION_RANGES[unitType]?.hill_mountain !== undefined ? VISION_RANGES[unitType].hill_mountain : visionRange;
-                }
-                // Note: Artillery combat range bonus might be different from vision range bonus.
-                // Check constants.js and adjust if necessary. Assuming vision and combat ranges are related.
+            // Assuming VISION_RANGES structure has hill or mountain for these types
+            if (terrainAtUnitHex === Terrain.HILL) { // Uses constants
+                // Check if hill_mountain range is defined, otherwise use base
+                visionRange = VISION_RANGES[unitType]?.hill !== undefined ? VISION_RANGES[unitType].hill : visionRange;
             }
-            // Note: Cavalry, Supply, Spy use base range only as per constants.js definition
-
+            if (terrainAtUnitHex === Terrain.MOUNTAIN) { // Uses constants
+                // Check if hill_mountain range is defined, otherwise use base
+                visionRange = VISION_RANGES[unitType]?.mountain !== undefined ? VISION_RANGES[unitType].mountain : visionRange;
+            }
 
             // originalConsoleLog(`[updateVisibility] Unit type ${getUnitTypeName(unitType)} ID ${unit.id} at (${unitR}, ${unitC}) on terrain ${terrainAtUnitHex} has vision range: ${visionRange}.`); // Too chatty
 
@@ -2102,6 +2096,7 @@ async function resolveCombatEngagement(combatId, initialAttackerUnits, initialDe
             clearTimeout(combatTimers.get(combatId));
             combatTimers.delete(combatId);
         }
+        updateVisibility();
     }
 }
 

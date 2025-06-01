@@ -187,23 +187,23 @@ function calculateMoveDurationGameMinutes(unitType, terrainType) {
 
 // Vision Ranges per unit type (distance in hexes)
 const VISION_RANGES = {
-    [UnitType.ARTILLERY]: { base: 4, hill_mountain: 7 }, // 7 hexes on hill/mountain, 4 everywhere else (Artillery has better sight from hills)
-    [UnitType.INFANTERY]: { base: 3, hill_mountain: 5 }, // 5 hexes on hill or mountain, 3 everywhere else
-    [UnitType.CAVALRY]: { base: 5 }, // 5 hexes everywhere (Cavalry is good for scouting)
+    [UnitType.ARTILLERY]: { base: 3, hill: 5}, 
+    [UnitType.INFANTERY]: { base: 3, hill: 5, mountain: 7 }, 
+    [UnitType.CAVALRY]: { base: 3, hill: 5 },
     [UnitType.SUPPLY]: { base: 2 }, // 2 cases
-    [UnitType.SPY]: { base: 10 }, // 10 cases (fixed)
-    [UnitType.GENERAL]: { base: 2 } // Nouveau : Général - Portée de vision 2 cases
+    [UnitType.SPY]: { base: 5, hill: 7, mountain: 9 },
+    [UnitType.GENERAL]: { base: 3, hill: 5, mountain: 7 } // Nouveau : Général - Portée de vision 2 cases
 };
 
 const MAX_RANGE = 4;
 // Combat Stats and Ranges per unit type
 const UNIT_COMBAT_STATS = {
-    [UnitType.ARTILLERY]: { attack: 20, defense: 18, range: { base: 3, hill_mountain: MAX_RANGE } }, // 4 cases sur colline/montagne, 3 partout ailleurs (pas de bonus montagne?) - Assuming Hill bonus applies only to hills as per prompt, adjusted to hill_mountain based on vision
-    [UnitType.INFANTERY]: { attack: 10, defense: 9, range: { base: 2, hill_mountain: 3 } }, // 3 cases sur colline ou montagne, 2 partout ailleurs
+    [UnitType.ARTILLERY]: { attack: 20, defense: 18, range: { base: 3, hill: MAX_RANGE } }, 
+    [UnitType.INFANTERY]: { attack: 10, defense: 9, range: { base: 2, hill: 3, mountain: MAX_RANGE }}, 
     [UnitType.CAVALRY]: { attack: 15, defense: 14, range: { base: 1 } }, // 1 case partout (contact)
     [UnitType.SUPPLY]: { attack: 1, defense: 2, range: { base: 1 } }, // 1 case partout
     [UnitType.SPY]: { attack: 1, defense: 1, range: { base: 1 } }, // 1 case partout
-    [UnitType.GENERAL]: { attack: 1, defense: 5, range: { base: 1 } } // Nouveau : Général - Attaque 1, Défense 5, Portée 2
+    [UnitType.GENERAL]: { attack: 1, defense: 5, range: { base: 2 } } // Nouveau : Général - Attaque 1, Défense 5, Portée 2
 };
 
 // Note on Artillery range: The prompt says "7 cases sur une colline et de 4 cases dans tous les autres cas".
