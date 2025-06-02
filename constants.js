@@ -198,9 +198,9 @@ const VISION_RANGES = {
 const MAX_RANGE = 4;
 // Combat Stats and Ranges per unit type
 const UNIT_COMBAT_STATS = {
-    [UnitType.ARTILLERY]: { attack: 20, defense: 18, range: { base: 3, hill: MAX_RANGE } }, 
-    [UnitType.INFANTERY]: { attack: 10, defense: 9, range: { base: 2, hill: 3, mountain: MAX_RANGE }}, 
-    [UnitType.CAVALRY]: { attack: 15, defense: 14, range: { base: 1 } }, // 1 case partout (contact)
+    [UnitType.ARTILLERY]: { attack: 10, defense: 10, range: { base: 3, hill: MAX_RANGE } }, 
+    [UnitType.INFANTERY]: { attack: 7, defense: 7, range: { base: 2, hill: 3, mountain: MAX_RANGE }}, 
+    [UnitType.CAVALRY]: { attack: 15, defense: 15, range: { base: 1 } }, // 1 case partout (contact)
     [UnitType.SUPPLY]: { attack: 1, defense: 2, range: { base: 1 } }, // 1 case partout
     [UnitType.SPY]: { attack: 1, defense: 1, range: { base: 1 } }, // 1 case partout
     [UnitType.GENERAL]: { attack: 1, defense: 5, range: { base: 2 } } // Nouveau : Général - Attaque 1, Défense 5, Portée 2
