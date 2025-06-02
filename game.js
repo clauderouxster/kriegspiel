@@ -23,6 +23,12 @@ let firstDraw = true;
 const combatTimers = new Map(); // Stocke les timers pour les engagements de combat en cours
 const nbUnitCentered = new Map();
 
+// Global variables for double-click detection
+let lastClickTime = 0;
+let lastClickedHexR = -1;
+let lastClickedHexC = -1;
+const DOUBLE_CLICK_THRESHOLD = 300; // milliseconds
+
 let audioContext;
 let trumpetBuffer;
 let musicDefeat;
@@ -2529,6 +2535,43 @@ function loadGameStateFromJson(state) {
 
     // The gameLoop will be started right after this call in the ws.onmessage handler ('GAME_STATE').
 }
+/**
+ * Gets all hexes within a specified range from a center hex.
+ * Does NOT check for line-of-sight or terrain blocking vision.
+ * Uses a BFS-like approach up to the max range.
+ * Depends on getNeighbors, isValid from utils.js.
+ * Access global currentMapRows, currentMapCols.
+ */
+
+function getHexesInRange(centerR, centerC, range) {
+    const neighbors = getNeighbors(centerR, centerC, currentMapRows, currentMapCols);
+    if (range == 1)
+        return neighbors;
+
+    const visited = new Set(`${centerR},${centerC}`);
+    const hexes = [];
+    let currentneighbors = neighbors;
+    rg = 1;
+    while (rg < range) {
+        let allneighbors = [];
+        for (const [nr, nc] of currentneighbors) {
+            const newneighbors = getNeighbors(nr, nc, currentMapRows, currentMapCols);
+            newneighbors.forEach(u => {
+                const neighborKey = `${u[0]},${u[1]}`;
+                if (visited.has(neighborKey) || !isValid(u[0], u[1], currentMapRows, currentMapCols))
+                    return;
+                visited.add(neighborKey);
+                hexes.push(u);
+                allneighbors.push(u);
+            });
+        }
+        currentneighbors = allneighbors;
+        rg++;
+    }
+
+    return hexes;
+}
+
 
 // Assume selectedUnits is declared globally and initialized as an empty array:
 // let selectedUnits = [];
@@ -2579,6 +2622,35 @@ function handleKeyDown(event) {
             selectedUnit = null;
             // You might want to redraw here to immediately show units as deselected
             drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors);
+        }
+    } else if (event.ctrlKey && event.key === "a") { // Check for Ctrl+A
+        event.preventDefault(); // Prevent default browser behavior (e.g., selecting all text)
+
+        if (selectedUnits.length === 1) { // Only if exactly one unit is selected
+            const unitType = selectedUnits[0].type;
+
+            // --- NOUVELLE LOGIQUE POUR DÉTERMINER LES LIMITES DE L'ÉCRAN RÉELLEMENT VISIBLES ---
+
+            const unitsToSelect = [];
+            currentUnits.forEach(unit => {
+                // Check if the unit is of the same type, friendly, within the calculated screen bounds, and alive
+                if (unit.type === unitType &&
+                    unit.armyColor === playerArmyColor &&
+                    unit.health > 0) {
+                    unitsToSelect.push(unit);
+                }
+            });
+
+            selectedUnits = unitsToSelect; // Update the selection
+            if (selectedUnits.length > 0) {
+                selectedUnit = selectedUnits[0]; // Set selectedUnit to the first unit if any
+            } else {
+                selectedUnit = null;
+            }
+            console.log(`Selected ${selectedUnits.length} units of type ${unitType} visible on screen.`);
+            drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors); // Redraw to show new selection
+        } else {
+            console.log("Ctrl+A: Only works when exactly one unit is selected.");
         }
     }
     // Add other key handling logic here if needed
@@ -2690,7 +2762,8 @@ function setupCanvasEventListeners() {
     //canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousedown', handleCanvasMouseDown);
     canvas.addEventListener('mousemove', handleCanvasMouseMove);
-    canvas.addEventListener('mouseup', handleCanvasMouseUp);    
+    canvas.addEventListener('mouseup', handleCanvasMouseUp);
+    document.addEventListener('keydown', handleKeyDown); // Add this line to listen for keyboard events
 }
 
 function updateNbCentered() {
@@ -2735,6 +2808,50 @@ function handleCanvasClick(event) {
     // Check if Shift key was pressed
     const shiftKey = event.shiftKey;
 
+            // --- Double-Click Detection ---
+    const currentTime = Date.now();
+    const isDoubleClick = (currentTime - lastClickTime < DOUBLE_CLICK_THRESHOLD) &&
+                          (clickedR === lastClickedHexR && clickedC === lastClickedHexC);
+
+    lastClickTime = currentTime;
+    lastClickedHexR = clickedR;
+    lastClickedHexC = clickedC;
+
+    if (isDoubleClick) {
+        if (unitAtClickedHex && unitAtClickedHex.armyColor === playerArmyColor && isVisible) {
+            // Double-clicked on a friendly unit
+            const clickedUnitType = unitAtClickedHex.type;
+            const selectionRadius = 12; // Define the radius for selection
+
+            const hexesInRadius = getHexesInRange(unitAtClickedHex.row, unitAtClickedHex.col, selectionRadius);
+            // Add the center hex itself to the list of hexes to check
+            hexesInRadius.push([unitAtClickedHex.row, unitAtClickedHex.col]);
+
+            const unitsToSelect = [];
+            const hexesInRadiusSet = new Set(hexesInRadius.map(h => `${h[0]},${h[1]}`));
+
+            livingUnits.forEach(unit => {
+                const unitKey = `${unit.row},${unit.col}`;
+                if (unit.type === clickedUnitType &&
+                    unit.armyColor === playerArmyColor &&
+                    hexesInRadiusSet.has(unitKey) &&
+                    unit.health > 0) {
+                    unitsToSelect.push(unit);
+                }
+            });
+
+            selectedUnits = unitsToSelect; // Update the selection
+            if (selectedUnits.length > 0) {
+                selectedUnit = selectedUnits[0]; // Set selectedUnit to the first unit if any
+            } else {
+                selectedUnit = null;
+            }
+            console.log(`Double-clicked: Selected ${selectedUnits.length} units of type ${clickedUnitType} within ${selectionRadius} hexes.`);
+            drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors); // Redraw to show new selection
+            return; // Stop further processing for this double-click
+        }
+    }
+
     // --- Handle Unit Selection / Interaction ---
 
     if (selectedUnits.length === 0) {
@@ -2772,7 +2889,7 @@ function handleCanvasClick(event) {
                     console.log(`${getUnitTypeName(unitAtClickedHex.type)} of the ${unitAtClickedHex.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army at (${unitAtClickedHex.row}, ${unitAtClickedHex.col}) added to selection.`);
                     originalConsoleLog(`[handleCanvasClick] Shift+Click: Added unit ID ${unitAtClickedHex.id} to selection.`);
                 }
-            } 
+            }
         } else {
             // Simple Click when units are selected.
             // This is either a deselect action or a move order for the selected group.
