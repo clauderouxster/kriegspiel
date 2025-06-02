@@ -198,7 +198,7 @@ const VISION_RANGES = {
 const MAX_RANGE = 4;
 // Combat Stats and Ranges per unit type
 const UNIT_COMBAT_STATS = {
-    [UnitType.ARTILLERY]: { attack: 10, defense: 10, range: { base: 3, hill: MAX_RANGE } }, 
+    [UnitType.ARTILLERY]: { attack: 12, defense: 12, range: { base: 3, hill: MAX_RANGE } }, 
     [UnitType.INFANTERY]: { attack: 7, defense: 7, range: { base: 2, hill: 3, mountain: MAX_RANGE }}, 
     [UnitType.CAVALRY]: { attack: 15, defense: 15, range: { base: 1 } }, // 1 case partout (contact)
     [UnitType.SUPPLY]: { attack: 1, defense: 2, range: { base: 1 } }, // 1 case partout
@@ -212,8 +212,8 @@ const UNIT_COMBAT_STATS = {
 
 // *** Unit Health Points (HP) ***
 const UNIT_HEALTH = {
-    [UnitType.ARTILLERY]: 5,
-    [UnitType.INFANTERY]: 10,
+    [UnitType.ARTILLERY]: 10,
+    [UnitType.INFANTERY]: 12,
     [UnitType.CAVALRY]: 15,
     [UnitType.SUPPLY]: 5, // Supply units are very fragile
     [UnitType.SPY]: 5, // Spy units are fragile
