@@ -212,7 +212,7 @@ const UNIT_COMBAT_STATS = {
 
 // *** Unit Health Points (HP) ***
 const UNIT_HEALTH = {
-    [UnitType.ARTILLERY]: 10,
+    [UnitType.ARTILLERY]: 5,
     [UnitType.INFANTERY]: 10,
     [UnitType.CAVALRY]: 15,
     [UnitType.SUPPLY]: 5, // Supply units are very fragile
