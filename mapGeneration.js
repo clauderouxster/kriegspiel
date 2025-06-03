@@ -23,6 +23,12 @@ function calculateMapDimensions(height) {
  * Depends on Terrain constants, MOUNTAIN_PROBABILITY,
  * BASE_HEIGHT_FOR_LAKE_SCALING, BASE_LAKE_SIZE_MIN, BASE_LAKE_SIZE_MAX, BASE_MAX_LAKES_FACTOR,
  * BASE_HEIGHT_FOR_FOREST_SCALING, BASE_FOREST_SIZE_MIN, BASE_FOREST_SIZE_MAX, BASE_MAX_FOREST_FACTOR
+ * 
+    map = generateMap(currentMapRows, currentMapCols,
+        MOUNTAIN_PROBABILITY,
+        BASE_HEIGHT_FOR_LAKE_SCALING, BASE_LAKE_SIZE_MIN, BASE_LAKE_SIZE_MAX, BASE_MAX_LAKES_FACTOR,
+        BASE_HEIGHT_FOR_FOREST_SCALING, BASE_FOREST_SIZE_MIN, BASE_FOREST_SIZE_MAX, BASE_MAX_FOREST_FACTOR);
+
  * from constants.js.
  * Depends on isValid, getNeighbors, shuffleArray from utils.js.
  */
@@ -41,11 +47,11 @@ function generateMap(rows, cols, mountainProb,
 
     // Cap lake sizes explicitly to avoid scaling issues
     const calculatedLakeSizeMin = Math.max(1, Math.min(2, Math.round(baseLakeSizeMin * heightRatioLake)));
-    const calculatedLakeSizeMax = Math.max(calculatedLakeSizeMin, Math.min(5, Math.round(baseLakeSizeMax * heightRatioLake)));
+    const calculatedLakeSizeMax = Math.max(calculatedLakeSizeMin, Math.min(baseLakeSizeMin, Math.round(baseLakeSizeMax * heightRatioLake)));
     const calculatedMaxLakes = Math.max(1, Math.round(rows / baseMaxLakesFactor));
 
     // Cap forest sizes similarly
-    const calculatedForestSizeMin = Math.max(1, Math.min(5, Math.round(baseForestSizeMin * heightRatioForest)));
+    const calculatedForestSizeMin = Math.max(1, Math.min(baseForestSizeMin, Math.round(baseForestSizeMin * heightRatioForest)));
     const calculatedForestSizeMax = Math.max(calculatedForestSizeMin, Math.min(15, Math.round(baseForestSizeMax * heightRatioForest)));
     const calculatedMaxForests = Math.max(1, Math.round(rows / baseMaxForestFactor));
 

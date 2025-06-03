@@ -2821,7 +2821,7 @@ function handleCanvasClick(event) {
         if (unitAtClickedHex && unitAtClickedHex.armyColor === playerArmyColor && isVisible) {
             // Double-clicked on a friendly unit
             const clickedUnitType = unitAtClickedHex.type;
-            const selectionRadius = 12; // Define the radius for selection
+            const selectionRadius = 10; // Define the radius for selection
 
             const hexesInRadius = getHexesInRange(unitAtClickedHex.row, unitAtClickedHex.col, selectionRadius);
             // Add the center hex itself to the list of hexes to check

@@ -70,8 +70,8 @@ const CENTER_AREA_PERCENT = 0.5; // 50% of the map center
 
 // Base height used for scaling lake and forest generation parameters
 const BASE_HEIGHT_FOR_LAKE_SCALING = 40; // For a 40-row map, these are the base values
-const BASE_LAKE_SIZE_MIN = 5; // Updated: Smaller minimum radius for lakes
-const BASE_LAKE_SIZE_MAX = 15; // Updated: Smaller maximum radius for lakes
+const BASE_LAKE_SIZE_MIN = 20; // Updated: Smaller minimum radius for lakes
+const BASE_LAKE_SIZE_MAX = 30; // Updated: Smaller maximum radius for lakes
 const BASE_MAX_LAKES_FACTOR = 1.2; // Updated: Higher factor to reduce max lakes (e.g., rows / 2.0)
 
 const BASE_HEIGHT_FOR_FOREST_SCALING = 40; // For a 40-row map, these are the base values
@@ -149,12 +149,12 @@ const TERRAIN_MOVEMENT_COSTS = {
 // Base movement capability per game hour (number of "movement cost units" covered per game hour)
 // Higher values mean faster movement
 const UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR = {
-    [UnitType.INFANTERY]: 3, // 10 cost units per game hour
-    [UnitType.ARTILLERY]: 2,
-    [UnitType.CAVALRY]: 5,
-    [UnitType.SUPPLY]: 2,
-    [UnitType.SCOUT]: 6, // Spy is fastest
-    [UnitType.GENERAL]: 4 // Nouveau : Général - Vitesse base (pour atteindre environ 10 de vitesse)
+    [UnitType.INFANTERY]: 4, // 10 cost units per game hour
+    [UnitType.ARTILLERY]: 3,
+    [UnitType.CAVALRY]: 6,
+    [UnitType.SUPPLY]: 3,
+    [UnitType.SCOUT]: 7, // Spy is fastest
+    [UnitType.GENERAL]: 5 // Nouveau : Général - Vitesse base (pour atteindre environ 10 de vitesse)
 };
 
 /**
@@ -187,12 +187,12 @@ function calculateMoveDurationGameMinutes(unitType, terrainType) {
 
 // Vision Ranges per unit type (distance in hexes)
 const VISION_RANGES = {
-    [UnitType.ARTILLERY]: { base: 3, hill: 5}, 
-    [UnitType.INFANTERY]: { base: 3, hill: 5, mountain: 7 }, 
-    [UnitType.CAVALRY]: { base: 3, hill: 5 },
+    [UnitType.ARTILLERY]: { base: 4, hill: 6}, 
+    [UnitType.INFANTERY]: { base: 4, hill: 6, mountain: 8 }, 
+    [UnitType.CAVALRY]: { base: 4, hill: 6 },
     [UnitType.SUPPLY]: { base: 2 }, // 2 cases
-    [UnitType.SCOUT]: { base: 5, hill: 7, mountain: 9 },
-    [UnitType.GENERAL]: { base: 5, hill: 9, mountain: 13 } // Nouveau : Général - Portée de vision 2 cases
+    [UnitType.SCOUT]: { base: 5, hill: 10, mountain: 15 },
+    [UnitType.GENERAL]: { base: 7, hill: 12, mountain: 17 } 
 };
 
 const MAX_RANGE = 4;
