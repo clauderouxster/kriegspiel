@@ -1305,7 +1305,7 @@ function updateDimensionsAndDraw() {
 
     const generalInput = document.getElementById('generalCount');
 
-    unitCounts[UnitType.SPY] = spyInput ? parseInt(spyInput.value) || 0 : 0;
+    unitCounts[UnitType.SCOUT] = spyInput ? parseInt(spyInput.value) || 0 : 0;
     unitCounts[UnitType.CAVALRY] = cavalryInput ? parseInt(cavalryInput.value) || 0 : 0;
     unitCounts[UnitType.INFANTERY] = infantryInput ? parseInt(infantryInput.value) || 0 : 0;
     unitCounts[UnitType.ARTILLERY] = artilleryInput ? parseInt(artilleryInput.value) || 0 : 0;
@@ -1891,7 +1891,7 @@ function moveUnitStep(unit) {
                 visitCount++;
                 unitHexVisits.set(currentHexKey, visitCount);
 
-                if (visitCount >= 2) {
+                if (visitCount >= 3) {
                     originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} detected loop. Stopping movement.`);
                     movedHexUnit.delete(unit);
                     unit.targetRow = null;
@@ -3571,7 +3571,7 @@ function displayHelp() {
     console.log("- Each unit has different movement costs depending on the terrain (Plains, Hill, Forest, Swamp). Mountains and Lakes are impassable.");
     console.log("- Units have HP, a vision range, and a combat range/strength.");
     console.log("- Supply units heal friendly units in friendly adjacent hexes.");
-    console.log("- Spy units have a large vision range and ignore terrain costs.");
+    console.log("- Scout units have a large vision range and ignore terrain costs.");
     console.log("");
     console.log("Combat:");
     console.log("- Combat is resolved automatically when enemy units are within mutual range.");

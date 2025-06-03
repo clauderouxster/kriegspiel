@@ -37,7 +37,7 @@ const UnitType = {
     ARTILLERY: 1,  // Artillerie
     CAVALRY: 2,    // Cavalerie
     SUPPLY: 3,     // Intendance
-    SPY: 4,         // Espion
+    SCOUT: 4,         // Espion
     GENERAL: 5      // Général
 };
 
@@ -51,7 +51,7 @@ const UNIT_IMAGE_PATHS = {
     [UnitType.ARTILLERY]: 'resources/artillerie.png',
     [UnitType.CAVALRY]: 'resources/cavalerie.png',
     [UnitType.SUPPLY]: 'resources/intendance.png',
-    [UnitType.SPY]: 'resources/espion.png',
+    [UnitType.SCOUT]: 'resources/espion.png',
     [UnitType.GENERAL]: 'resources/general.png' // Nouveau : Fichier pour le général
 };
 
@@ -128,7 +128,7 @@ const TERRAIN_MOVEMENT_COSTS = {
         [Terrain.LAKE]: Infinity, // Cannot cross lakes
         [Terrain.FOREST]: 2
     },
-    [UnitType.SPY]: { // Espion - ignores most terrain costs except impassable
+    [UnitType.SCOUT]: { // Espion - ignores most terrain costs except impassable
         [Terrain.FLAT]: 0.7,
         [Terrain.MOUNTAIN]: 1,
         [Terrain.HILL]: 1,
@@ -153,7 +153,7 @@ const UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR = {
     [UnitType.ARTILLERY]: 2,
     [UnitType.CAVALRY]: 5,
     [UnitType.SUPPLY]: 2,
-    [UnitType.SPY]: 6, // Spy is fastest
+    [UnitType.SCOUT]: 6, // Spy is fastest
     [UnitType.GENERAL]: 4 // Nouveau : Général - Vitesse base (pour atteindre environ 10 de vitesse)
 };
 
@@ -191,7 +191,7 @@ const VISION_RANGES = {
     [UnitType.INFANTERY]: { base: 3, hill: 5, mountain: 7 }, 
     [UnitType.CAVALRY]: { base: 3, hill: 5 },
     [UnitType.SUPPLY]: { base: 2 }, // 2 cases
-    [UnitType.SPY]: { base: 5, hill: 7, mountain: 9 },
+    [UnitType.SCOUT]: { base: 5, hill: 7, mountain: 9 },
     [UnitType.GENERAL]: { base: 5, hill: 9, mountain: 13 } // Nouveau : Général - Portée de vision 2 cases
 };
 
@@ -202,7 +202,7 @@ const UNIT_COMBAT_STATS = {
     [UnitType.INFANTERY]: { attack: 7, defense: 7, range: { base: 2, hill: 3, mountain: MAX_RANGE }}, 
     [UnitType.CAVALRY]: { attack: 15, defense: 15, range: { base: 1 } }, // 1 case partout (contact)
     [UnitType.SUPPLY]: { attack: 1, defense: 2, range: { base: 1 } }, // 1 case partout
-    [UnitType.SPY]: { attack: 1, defense: 1, range: { base: 1 } }, // 1 case partout
+    [UnitType.SCOUT]: { attack: 1, defense: 1, range: { base: 1 } }, // 1 case partout
     [UnitType.GENERAL]: { attack: 1, defense: 5, range: { base: 2 } } // Nouveau : Général - Attaque 1, Défense 5, Portée 2
 };
 
@@ -216,7 +216,7 @@ const UNIT_HEALTH = {
     [UnitType.INFANTERY]: 12,
     [UnitType.CAVALRY]: 15,
     [UnitType.SUPPLY]: 5, // Supply units are very fragile
-    [UnitType.SPY]: 5, // Spy units are fragile
+    [UnitType.SCOUT]: 5, // Spy units are fragile
     [UnitType.GENERAL]: 10 // Nouveau : Général - PV à 10
 };
 // Combat Damage Scaling Factor
@@ -261,7 +261,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: TERRAIN_MOVEMENT_COSTS[UnitType.ARTILLERY][Terrain.FLAT],
         [UnitType.CAVALRY]: TERRAIN_MOVEMENT_COSTS[UnitType.CAVALRY][Terrain.FLAT],
         [UnitType.SUPPLY]: TERRAIN_MOVEMENT_COSTS[UnitType.SUPPLY][Terrain.FLAT],
-        [UnitType.SPY]: TERRAIN_MOVEMENT_COSTS[UnitType.SPY][Terrain.FLAT],
+        [UnitType.SCOUT]: TERRAIN_MOVEMENT_COSTS[UnitType.SCOUT][Terrain.FLAT],
         [UnitType.GENERAL]: TERRAIN_MOVEMENT_COSTS[UnitType.GENERAL][Terrain.FLAT]
     },
     [Terrain.MOUNTAIN]: {
@@ -269,7 +269,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: TERRAIN_MOVEMENT_COSTS[UnitType.ARTILLERY][Terrain.MOUNTAIN],
         [UnitType.CAVALRY]: TERRAIN_MOVEMENT_COSTS[UnitType.CAVALRY][Terrain.MOUNTAIN],
         [UnitType.SUPPLY]: TERRAIN_MOVEMENT_COSTS[UnitType.SUPPLY][Terrain.MOUNTAIN],
-        [UnitType.SPY]: TERRAIN_MOVEMENT_COSTS[UnitType.SPY][Terrain.MOUNTAIN],
+        [UnitType.SCOUT]: TERRAIN_MOVEMENT_COSTS[UnitType.SCOUT][Terrain.MOUNTAIN],
         [UnitType.GENERAL]: TERRAIN_MOVEMENT_COSTS[UnitType.GENERAL][Terrain.MOUNTAIN]
     },
     [Terrain.HILL]: {
@@ -277,7 +277,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: TERRAIN_MOVEMENT_COSTS[UnitType.ARTILLERY][Terrain.HILL],
         [UnitType.CAVALRY]: TERRAIN_MOVEMENT_COSTS[UnitType.CAVALRY][Terrain.HILL],
         [UnitType.SUPPLY]: TERRAIN_MOVEMENT_COSTS[UnitType.SUPPLY][Terrain.HILL],
-        [UnitType.SPY]: TERRAIN_MOVEMENT_COSTS[UnitType.SPY][Terrain.HILL],
+        [UnitType.SCOUT]: TERRAIN_MOVEMENT_COSTS[UnitType.SCOUT][Terrain.HILL],
         [UnitType.GENERAL]: TERRAIN_MOVEMENT_COSTS[UnitType.GENERAL][Terrain.HILL]
     },
     [Terrain.SWAMP]: {
@@ -285,7 +285,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: TERRAIN_MOVEMENT_COSTS[UnitType.ARTILLERY][Terrain.SWAMP],
         [UnitType.CAVALRY]: TERRAIN_MOVEMENT_COSTS[UnitType.CAVALRY][Terrain.SWAMP],
         [UnitType.SUPPLY]: TERRAIN_MOVEMENT_COSTS[UnitType.SUPPLY][Terrain.SWAMP],
-        [UnitType.SPY]: TERRAIN_MOVEMENT_COSTS[UnitType.SPY][Terrain.SWAMP],
+        [UnitType.SCOUT]: TERRAIN_MOVEMENT_COSTS[UnitType.SCOUT][Terrain.SWAMP],
         [UnitType.GENERAL]: TERRAIN_MOVEMENT_COSTS[UnitType.GENERAL][Terrain.SWAMP]
     },
     [Terrain.LAKE]: {
@@ -293,7 +293,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: TERRAIN_MOVEMENT_COSTS[UnitType.ARTILLERY][Terrain.LAKE],
         [UnitType.CAVALRY]: TERRAIN_MOVEMENT_COSTS[UnitType.CAVALRY][Terrain.LAKE],
         [UnitType.SUPPLY]: TERRAIN_MOVEMENT_COSTS[UnitType.SUPPLY][Terrain.LAKE],
-        [UnitType.SPY]: TERRAIN_MOVEMENT_COSTS[UnitType.SPY][Terrain.LAKE],
+        [UnitType.SCOUT]: TERRAIN_MOVEMENT_COSTS[UnitType.SCOUT][Terrain.LAKE],
         [UnitType.GENERAL]: TERRAIN_MOVEMENT_COSTS[UnitType.GENERAL][Terrain.LAKE]
     },
     [Terrain.FOREST]: {
@@ -301,7 +301,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: TERRAIN_MOVEMENT_COSTS[UnitType.ARTILLERY][Terrain.FOREST],
         [UnitType.CAVALRY]: TERRAIN_MOVEMENT_COSTS[UnitType.CAVALRY][Terrain.FOREST],
         [UnitType.SUPPLY]: TERRAIN_MOVEMENT_COSTS[UnitType.SUPPLY][Terrain.FOREST],
-        [UnitType.SPY]: TERRAIN_MOVEMENT_COSTS[UnitType.SPY][Terrain.FOREST],
+        [UnitType.SCOUT]: TERRAIN_MOVEMENT_COSTS[UnitType.SCOUT][Terrain.FOREST],
         [UnitType.GENERAL]: TERRAIN_MOVEMENT_COSTS[UnitType.GENERAL][Terrain.FOREST]
     },
     // Add UNASSIGNED or other temporary states if needed, assuming they are impassable
@@ -310,7 +310,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: Infinity,
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
-        [UnitType.SPY]: Infinity,
+        [UnitType.SCOUT]: Infinity,
         [UnitType.GENERAL]: Infinity
     },
     [HILL_CANDIDATE]: { // Assuming candidate states are also impassable
@@ -318,7 +318,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: Infinity,
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
-        [UnitType.SPY]: Infinity,
+        [UnitType.SCOUT]: Infinity,
         [UnitType.GENERAL]: Infinity
     },
     [SWAMP_CANDIDATE]: { // Assuming candidate states are also impassable
@@ -326,7 +326,7 @@ const MOVEMENT_COSTS = {
         [UnitType.ARTILLERY]: Infinity,
         [UnitType.CAVALRY]: Infinity,
         [UnitType.SUPPLY]: Infinity,
-        [UnitType.SPY]: Infinity,
+        [UnitType.SCOUT]: Infinity,
         [UnitType.GENERAL]: Infinity
     },
 };

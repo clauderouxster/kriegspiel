@@ -24,7 +24,7 @@ const UNIT_TYPE_NAMES = {
     [UnitType.ARTILLERY]: "Artillery",
     [UnitType.CAVALRY]: "Cavalry",
     [UnitType.SUPPLY]: "Supplies",
-    [UnitType.SPY]: "Spy",
+    [UnitType.SCOUT]: "Scout",
     [UnitType.GENERAL]: "General" // Nouveau : Nom pour le général
 };
 

@@ -85,7 +85,7 @@ function createInitialUnits(map, rows, cols, unitCounts) {
 
     // Order of placement by type group: Spy/Supply, Cavalry, Artillery, Infantry
     let orderedUnitTypes = [
-        UnitType.SPY, UnitType.SUPPLY,
+        UnitType.SCOUT, UnitType.SUPPLY,
         UnitType.CAVALRY,
         UnitType.ARTILLERY,
         UnitType.INFANTERY
@@ -154,7 +154,7 @@ function createInitialUnits(map, rows, cols, unitCounts) {
         UnitType.INFANTERY,
         UnitType.ARTILLERY,
         UnitType.CAVALRY,
-        UnitType.SPY, UnitType.SUPPLY,
+        UnitType.SCOUT, UnitType.SUPPLY,
     ];
 
      /*
@@ -164,7 +164,7 @@ function createInitialUnits(map, rows, cols, unitCounts) {
         const redRow = redArmyBaseRow + offset;
          if (redRow >= 0 && redRow < rows) {
             // Recalculate initial column for centering attempt
-             const totalUnitsInRow = (redUnitsByType[UnitType.SPY]?.length || 0) + (redUnitsByType[UnitType.SUPPLY]?.length || 0) // Approx count for line 1
+             const totalUnitsInRow = (redUnitsByType[UnitType.SCOUT]?.length || 0) + (redUnitsByType[UnitType.SUPPLY]?.length || 0) // Approx count for line 1
                                         + (redUnitsByType[UnitType.CAVALRY]?.length || 0) // Approx count for line 2
                                         + (redUnitsByType[UnitType.ARTILLERY]?.length || 0) // Approx count for line 3
                                         + (redUnitsByType[UnitType.INFANTERY]?.length || 0); // Approx count for line 4 (excluding general here)
