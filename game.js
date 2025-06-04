@@ -988,6 +988,23 @@ function updateVisibility() {
 // ============================================================================
 
 /**
+ * Clears an unit's movement state and stops its movement timer.
+ * @param {object} unit - The unit to clear.
+ */
+function stopUnitMovement(unit) {
+    movedHexUnit.delete(unit); // Remove from loop detection list
+    unit.targetRow = null;
+    unit.targetCol = null;
+    unit.movementProgress = 0; // Reset progress
+    unit.previousRow = unit.row;
+    unit.previousCol = unit.col;
+    if (unitMovementTimers.has(unit.id)) {
+        clearTimeout(unitMovementTimers.get(unit.id));
+        unitMovementTimers.delete(unit.id);
+    }
+}
+
+/**
  * Gère un seul pas de mouvement pour une unité donnée.
  * Calcule le prochain hexagone, met à jour la position de l'unité,
  * et redémarre un timer pour le pas suivant si nécessaire.
@@ -1009,16 +1026,7 @@ function moveUnitStep(unit) {
     // Si l'unité est déjà à la cible ou n'a plus de cible valide, annuler le mouvement.
     if (targetR === null || targetC === null || (currentR === targetR && currentC === targetC)) {
         //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} arrived at target (${unit.row}, ${unit.col}) or target cleared. Stopping movement.`);
-        movedHexUnit.delete(unit); // Supprimer de la liste de détection de boucle
-        unit.targetRow = null;
-        unit.targetCol = null;
-        unit.movementProgress = 0; // Réinitialiser le progrès
-        unit.previousRow = unit.row;
-        unit.previousCol = unit.col;
-        if (unitMovementTimers.has(unit.id)) {
-            clearTimeout(unitMovementTimers.get(unit.id));
-            unitMovementTimers.delete(unit.id);
-        }
+        stopUnitMovement(unit);
         return; // Arrêter le traitement pour cette unité
     }
 
@@ -1037,13 +1045,13 @@ function moveUnitStep(unit) {
         const currentHexKey = `${neighborR},${neighborC}`;
         if (movedHexUnit.has(unit) && movedHexUnit.get(unit).has(currentHexKey)) {
             let visitCount = movedHexUnit.get(unit).get(currentHexKey);
-            if (visitCount > 5) {
+            if (visitCount > 7) {
                 viableNeighbors = [];
                 break;
             }
             visitCount++;
             movedHexUnit.get(unit).set(currentHexKey, visitCount);            
-            if (visitCount > 3)
+            if (visitCount > 4)
                 continue;
         }
 
@@ -1066,16 +1074,7 @@ function moveUnitStep(unit) {
     }
 
     if (viableNeighbors.length === 0) {
-        movedHexUnit.delete(unit);
-        unit.targetRow = null;
-        unit.targetCol = null;
-        unit.movementProgress = 0;
-        unit.previousRow = unit.row;
-        unit.previousCol = unit.col;
-        if (unitMovementTimers.has(unit.id)) {
-            clearTimeout(unitMovementTimers.get(unit.id));
-            unitMovementTimers.delete(unit.id);
-        }
+        stopUnitMovement(unit);
         return; // Unité bloquée, arrêter le mouvement
     }
 
@@ -1084,6 +1083,11 @@ function moveUnitStep(unit) {
     for (const neighbor of viableNeighbors) {
         const { r: neighborR, c: neighborC, gameMinutesCost: gameMinutesNeededForStep } = neighbor;
         const targetDistance = getHexDistance(neighborR, neighborC, targetR, targetC);
+
+        const currentHexKey = `${neighborR},${neighborC}`;
+        let penaltyVisit = 0;
+        if (movedHexUnit.has(unit) && movedHexUnit.get(unit).has(currentHexKey))
+            penaltyVisit = movedHexUnit.get(unit).get(currentHexKey) * 20;
 
         let previousHexPenalty = 0;
         if (neighborR === unit.previousRow && neighborC === unit.previousCol && !onlyPreviousHexIsViable) {
@@ -1094,7 +1098,7 @@ function moveUnitStep(unit) {
         // noter le risque de désynchro sans un PRNG avec seed synchronisée pour le multijoueur.
         const randomFactor = (Math.random() * 0.01) - 0.005;
 
-        const combinedMetric = targetDistance * 1000 + (gameMinutesNeededForStep + previousHexPenalty) + randomFactor;
+        const combinedMetric = targetDistance * 1000 + (gameMinutesNeededForStep + previousHexPenalty) + randomFactor + penaltyVisit;
 
         if (neighborR == targetR && neighborC == targetC) {
             minCombinedMetric = combinedMetric;
@@ -1145,16 +1149,7 @@ function moveUnitStep(unit) {
 
         // Si l'unité est arrivée à destination après ce pas
         if (unit.row === targetR && unit.col === targetC) {
-            movedHexUnit.delete(unit);
-            unit.targetRow = null;
-            unit.targetCol = null;
-            unit.movementProgress = 0;
-            unit.previousRow = unit.row;
-            unit.previousCol = unit.col;
-            if (unitMovementTimers.has(unit.id)) {
-                clearTimeout(unitMovementTimers.get(unit.id));
-                unitMovementTimers.delete(unit.id);
-            }
+            stopUnitMovement(unit);
             return; // L'unité est arrivée
         }
 
@@ -1164,17 +1159,8 @@ function moveUnitStep(unit) {
         unitMovementTimers.set(unit.id, timerId);
         //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} moved to (${unit.row}, ${unit.col}). Next step in ${realTimeForNextStep.toFixed(0)} ms.`);
     } else {
+        stopUnitMovement(unit);
         // Fallback si aucun meilleur hexagone n'est trouvé (ne devrait pas arriver si viableNeighbors n'est pas vide)
-        movedHexUnit.delete(unit);
-        unit.targetRow = null;
-        unit.targetCol = null;
-        unit.movementProgress = 0;
-        unit.previousRow = unit.row;
-        unit.previousCol = unit.col;
-        if (unitMovementTimers.has(unit.id)) {
-            clearTimeout(unitMovementTimers.get(unit.id));
-            unitMovementTimers.delete(unit.id);
-        }
     }
 }
 
