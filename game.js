@@ -92,6 +92,7 @@ let helpButton = null;
 // *** NEW : Variable for the Start button (for the Blue player) ***
 let startButton = null;
 let newGameButton = null;
+
 // *** END NEW ***
 
 
@@ -2328,6 +2329,8 @@ function endGame(winningArmyColor) {
     if (playerArmyColor === ARMY_COLOR_BLUE) {
         stopSyncInterval(); // Uses global stopSyncInterval
     }
+    
+    updateNewGameButtonVisibility();
   }
 
 /**
@@ -2373,6 +2376,8 @@ function handleGameOver(winningArmyColor) {
 
          drawMapAndUnits(ctx, map, currentUnits, HEX_SIZE, TerrainColors); // Uses global variables
      }
+
+    updateNewGameButtonVisibility();
 }
 
 // ============================================================================
@@ -2526,6 +2531,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     if (newGameButton) {
+        newGameButton.style.display = 'none';
         originalConsoleLog("[DOMContentLoaded] newGameButton button element found and hidden.");
     } else {
         originalConsoleWarn("[DOMContentLoaded] newGameButton button element not found.");
@@ -2703,3 +2709,17 @@ window.addEventListener('DOMContentLoaded', () => {
 
     });
 });
+
+// *** NEW : Fonction pour mettre à jour la visibilité du bouton "Nouvelle Partie" ***
+/**
+ * Updates the visibility of the new game button based on the gameOver state.
+ */
+function updateNewGameButtonVisibility() {
+if (newGameButton) {
+        newGameButton.style.display = 'inline-block'; // Affiche le bouton
+        originalConsoleLog("[updateNewGameButtonVisibility] New Game button displayed.");
+    } else {
+        newGameButton.style.display = 'none'; // Cache le bouton
+        originalConsoleLog("[updateNewGameButtonVisibility] New Game button hidden.");
+    }
+}
