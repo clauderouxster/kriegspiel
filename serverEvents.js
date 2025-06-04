@@ -8,7 +8,6 @@ let messageChat = null;
 let syncSequenceNumber = 0; // For Blue player: Incremented for each STATE_SYNC sent
 let lastReceivedSyncSequenceNumber = -1; // For Red player: Tracks the last processed sequence number
 
-
 // ============================================================================
 // Multiplayer Variables and Functions
 // ============================================================================
@@ -568,4 +567,7 @@ function sendChatMessage() {
         chatInput.focus(); // Keep focus on the input field
     }
 }
+
+
+// *** END NEW ***
 

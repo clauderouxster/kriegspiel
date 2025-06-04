@@ -91,6 +91,7 @@ let helpButton = null;
 
 // *** NEW : Variable for the Start button (for the Blue player) ***
 let startButton = null;
+let newGameButton = null;
 // *** END NEW ***
 
 
@@ -1052,8 +1053,6 @@ function moveUnitStep(unit) {
     }
 
     if (viableNeighbors.length === 0) {
-        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === playerArmyColor ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}).`);
-        originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). No viable neighbors.`);
         movedHexUnit.delete(unit);
         unit.targetRow = null;
         unit.targetCol = null;
@@ -1148,8 +1147,6 @@ function moveUnitStep(unit) {
 
         // Si l'unité est arrivée à destination après ce pas
         if (unit.row === targetR && unit.col === targetC) {
-            console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army has arrived at destination (${unit.row}, ${unit.col}).`);
-            originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} arrived at final destination (${unit.row}, ${unit.col}) after step.`);
             movedHexUnit.delete(unit);
             unit.targetRow = null;
             unit.targetCol = null;
@@ -1170,8 +1167,6 @@ function moveUnitStep(unit) {
         //originalConsoleLog(`[moveUnitStep] Unit ID ${unit.id} moved to (${unit.row}, ${unit.col}). Next step in ${realTimeForNextStep.toFixed(0)} ms.`);
     } else {
         // Fallback si aucun meilleur hexagone n'est trouvé (ne devrait pas arriver si viableNeighbors n'est pas vide)
-        console.log(`${getUnitTypeName(unit.type)} of the ${unit.armyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red'} army is blocked at (${unit.row}, ${unit.col}) towards (${targetR}, ${targetC}) - fallback block.`);
-        originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} is blocked at (${unit.row}, ${unit.col}). Fallback block.`);
         movedHexUnit.delete(unit);
         unit.targetRow = null;
         unit.targetCol = null;
@@ -1235,16 +1230,6 @@ async function resolveCombatEngagement(combatId, initialAttackerUnits, initialDe
     const firstAttackerUnit = Array.from(livingAttackerUnits)[0];
     const firstEnemyUnitInContactUnit = Array.from(livingDefenderUnits)[0];
 
-    let outcomeMessage = `Combat à (${firstAttackerUnit.row}, ${firstAttackerUnit.col}) vs (${firstEnemyUnitInContactUnit.row}, ${firstEnemyUnitInContactUnit.col}): `;
-    if (combatResult.outcome === 'attacker') {
-        outcomeMessage += `Victoire pour l'armée ${firstAttackerUnit.armyColor === ARMY_COLOR_BLUE ? 'Bleue' : 'Rouge'}.`;
-    } else if (combatResult.outcome === 'defender') {
-        outcomeMessage += `Victoire pour l'armée ${firstEnemyUnitInContactUnit.armyColor === ARMY_COLOR_BLUE ? 'Bleue' : 'Rouge'}.`;
-    } else {
-        outcomeMessage += `Égalité.`;
-    }
-    outcomeMessage += ` Dégâts appliqués (${combatResult.targetSide}) : ${combatResult.damage.toFixed(1)}`;
-    console.log(outcomeMessage);
 
     let unitsEliminatedThisCombatInstance = [];
     if (combatResult.damage > 0) {
@@ -2523,8 +2508,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // *** NEW : Get network connection elements ***
     const connectButton = document.getElementById('connectButton');
-    const serverAddressInput = document.getElementById('serverAddressInput');
     startButton = document.getElementById('startButton'); // *** NEW : Get Start button ***
+    newGameButton = document.getElementById('newGameButton');
 
     // *** NEW: Get chat input and send button elements ***
     const chatInput = document.getElementById('chatInput'); // Assuming your input has ID 'chatInput'
@@ -2538,6 +2523,12 @@ window.addEventListener('DOMContentLoaded', () => {
         originalConsoleLog("[DOMContentLoaded] Start button element found and hidden.");
     } else {
         originalConsoleWarn("[DOMContentLoaded] Start button element not found.");
+    }
+
+    if (newGameButton) {
+        originalConsoleLog("[DOMContentLoaded] newGameButton button element found and hidden.");
+    } else {
+        originalConsoleWarn("[DOMContentLoaded] newGameButton button element not found.");
     }
     // *** END NEW ***
 
@@ -2670,6 +2661,18 @@ window.addEventListener('DOMContentLoaded', () => {
                 }
             });
             originalConsoleLog("[DOMContentLoaded] Start button event listener attached.");
+        }
+
+        // *** NEW : Get reference to the new game button and add event listener ***
+        
+        if (newGameButton) {
+            newGameButton.addEventListener('click', () => {
+                originalConsoleLog("[newGameButton] New Game button clicked. Reloading page...");
+                window.location.reload(); // Recharge la page
+            });
+            originalConsoleLog("[DOMContentLoaded] New Game button event listener attached.");
+        } else {
+            originalConsoleWarn("[DOMContentLoaded] New Game button not found.");
         }
         // *** END NEW ***
 
