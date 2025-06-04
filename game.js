@@ -1034,6 +1034,18 @@ function moveUnitStep(unit) {
         const neighborC = neighbor[1];
 
         if (!isValid(neighborR, neighborC, currentMapRows, currentMapCols)) continue;
+        const currentHexKey = `${neighborR},${neighborC}`;
+        if (movedHexUnit.has(unit) && movedHexUnit.get(unit).has(currentHexKey)) {
+            let visitCount = movedHexUnit.get(unit).get(currentHexKey);
+            if (visitCount > 5) {
+                viableNeighbors = [];
+                break;
+            }
+            visitCount++;
+            movedHexUnit.get(unit).set(currentHexKey, visitCount);            
+            if (visitCount > 3)
+                continue;
+        }
 
         const neighborTerrain = map[neighborR][neighborC];
         const gameMinutesNeededForStep = calculateMoveDurationGameMinutes(unit.type, neighborTerrain);
@@ -1107,39 +1119,24 @@ function moveUnitStep(unit) {
         unit.previousRow = oldR;
         unit.previousCol = oldC;
 
+        const currentHexKey = `${nextR},${nextC}`;
         // Mise à jour de movedHexUnit pour la détection de boucle
         if (!movedHexUnit.has(unit)) {
             const hexVisits = new Map();
-            hexVisits.set(`${nextR},${nextC}`, 1);
+            hexVisits.set(currentHexKey, 1);
             movedHexUnit.set(unit, hexVisits);
         } else {
             const unitHexVisits = movedHexUnit.get(unit);
-            const currentHexKey = `${nextR},${nextC}`;
-
             if (unitHexVisits.has(currentHexKey)) {
                 let visitCount = unitHexVisits.get(currentHexKey);
                 visitCount++;
                 unitHexVisits.set(currentHexKey, visitCount);
-
-                if (visitCount >= 3) {
-                    originalConsoleLog(`[moveUnitStep] Unit type ${getUnitTypeName(unit.type)} ID ${unit.id} detected loop. Stopping movement.`);
-                    movedHexUnit.delete(unit);
-                    unit.targetRow = null;
-                    unit.targetCol = null;
-                    unit.movementProgress = 0;
-                    unit.previousRow = unit.row;
-                    unit.previousCol = unit.col;
-                    if (unitMovementTimers.has(unit.id)) {
-                        clearTimeout(unitMovementTimers.get(unit.id));
-                        unitMovementTimers.delete(unit.id);
-                    }
-                    return; // Arrêter le mouvement en cas de boucle
-                }
-            } else {
-                unitHexVisits.set(currentHexKey, 1);
             }
-        }
+            else
+                unitHexVisits.set(currentHexKey, 1);
 
+        }
+        
         // Mise à jour de la visibilité car l'unité a bougé
         // Note: updateVisibility() devrait être appelé une seule fois par tick globalement,
         // mais pour l'instant, nous le mettons ici pour réactivité si une unité individuelle bouge.
