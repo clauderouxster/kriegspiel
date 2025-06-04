@@ -344,4 +344,14 @@ for (const terrainType in MOVEMENT_COSTS) {
         }
     }
 }
-//--- Version Multijoueur
+
+// *** NEW: Mapping of UnitType enum values to human-readable names ***
+const UNIT_TYPE_NAMES = {
+    [UnitType.INFANTERY]: "Infantery",
+    [UnitType.ARTILLERY]: "Artillery",
+    [UnitType.CAVALRY]: "Cavalry",
+    [UnitType.SUPPLY]: "Supplies",
+    [UnitType.SCOUT]: "Scout",
+    [UnitType.GENERAL]: "General" // Nouveau : Nom pour le général
+};
+

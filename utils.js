@@ -18,15 +18,6 @@
  * Accède aux fonctions originales de la console (définies dans game.js).
  */
 
-// *** NEW: Mapping of UnitType enum values to human-readable names ***
-const UNIT_TYPE_NAMES = {
-    [UnitType.INFANTERY]: "Infantery",
-    [UnitType.ARTILLERY]: "Artillery",
-    [UnitType.CAVALRY]: "Cavalry",
-    [UnitType.SUPPLY]: "Supplies",
-    [UnitType.SCOUT]: "Scout",
-    [UnitType.GENERAL]: "General" // Nouveau : Nom pour le général
-};
 
 /**
  * Checks if coordinates are within the map bounds.
@@ -347,22 +338,39 @@ function shuffleArray(array) {
 }
 
 /**
- * Gets the effective combat range for a group of units.
- * This is a copy of the function from game.js, but placed here for completeness in utils.
- * Should ideally be in game.js as it relates to combat logic.
- * If it's needed elsewhere, a shared module or careful dependency management is required.
- * Let's keep the primary implementation in game.js and note this here.
- *
- * --- NOTE ---
- * The authoritative version of getEffectiveGroupCombatRange is in game.js.
- * This definition is a placeholder/copy for file completeness but should
- * be kept in sync or removed if not needed elsewhere.
- * ---
+ * Gets all hexes within a specified range from a center hex.
+ * Does NOT check for line-of-sight or terrain blocking vision.
+ * Uses a BFS-like approach up to the max range.
+ * Depends on getNeighbors, isValid from utils.js.
+ * Access global currentMapRows, currentMapCols.
  */
-// function getEffectiveGroupCombatRange(unitsList, unitCombatStats, unitTypeConstants) {
-//      // ... (implementation from game.js) ...
-//      // Removed the implementation here to avoid redundancy and potential sync issues.
-//      // The function in game.js is the source of truth.
-// }
 
-//--- Version Corrigée (avec getHexFromCoordinates et getNeighbors précis)
+function getHexesInRange(centerR, centerC, range) {
+    const neighbors = getNeighbors(centerR, centerC, currentMapRows, currentMapCols);
+    if (range == 1)
+        return neighbors;
+
+    const visited = new Set(`${centerR},${centerC}`);
+    const hexes = [];
+    let currentneighbors = neighbors;
+    rg = 1;
+    while (rg < range) {
+        let allneighbors = [];
+        for (const [nr, nc] of currentneighbors) {
+            const newneighbors = getNeighbors(nr, nc, currentMapRows, currentMapCols);
+            newneighbors.forEach(u => {
+                const neighborKey = `${u[0]},${u[1]}`;
+                if (visited.has(neighborKey) || !isValid(u[0], u[1], currentMapRows, currentMapCols))
+                    return;
+                visited.add(neighborKey);
+                hexes.push(u);
+                allneighbors.push(u);
+            });
+        }
+        currentneighbors = allneighbors;
+        rg++;
+    }
+
+    return hexes;
+}
+
