@@ -18,7 +18,7 @@ let currentMapRows; // Dynamic map height (Set by mapGeneration.js)
 let currentMapCols; // Dynamic map width (Set by mapGeneration.js)
 let currentUnits = []; // Array to hold the currently placed units (Populated by unitManagement.js)
 let unitOnId = new Map();
-let firstDraw = true;
+let initialScrollDownForRed = false;
 // Ajoutez cette variable globale en haut de votre script, près de unitMovementTimers
 const combatTimers = new Map(); // Stocke les timers pour les engagements de combat en cours
 const nbUnitCentered = new Map();
@@ -36,7 +36,6 @@ let musicVictory;
 let allUnitInvolvedCombat = new Set();
 
 let messageEndGame = null;
-let messageChat = null;
 
 // Image loading variables
 const unitImages = {}; // Object to hold loaded Image objects { UnitType: Image, ... }
@@ -538,8 +537,8 @@ function drawMapAndUnits(ctx, map, currentUnits, size, terrainColors) {
         ctx.fillRect(x, y, width, height);
     }
 
-    if (firstDraw && playerArmyColor == ARMY_COLOR_RED) {
-        firstDraw = false;
+    if (!initialScrollDownForRed && playerArmyColor == ARMY_COLOR_RED) {
+        initialScrollDownForRed = true;
         window.scrollTo(0, document.body.scrollHeight);
     }
     // Draw the game clock (always visible)
@@ -3021,46 +3020,3 @@ window.addEventListener('DOMContentLoaded', () => {
 
     });
 });
-
-/*
- * Reads the message from the chat input, appends it to the console output, and clears the input.
- * This version sends the message to the server via WebSocket for multiplayer chat.
- * Accesses global consoleOutputDiv, chatInput, ws, playerArmyColor.
- */
-function sendChatMessage() {
-    messageChat = null;
-    const chatInput = document.getElementById('chatInput'); // Get the element inside the function too for safety
-    if (!chatInput || !consoleOutputDiv) {
-        originalConsoleWarn("[sendChatMessage] Chat input or console output div not found.");
-        return;
-    }
-
-    const message = chatInput.value.trim(); // Get message and remove leading/trailing whitespace
-
-    if (message) { // Only send non-empty messages
-        // Display the message in the local console immediately with player's army color
-        const senderColor = playerArmyColor ? (playerArmyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red') : 'Player'; // Use playerArmyColor if set
-        console.log(`${senderColor}: ${message}`);
-
-        // *** For multiplayer, send this message via WebSocket: ***
-        if (ws && ws.readyState === WebSocket.OPEN) { // Only send if connected and player color is assigned
-            const chatMessage = {
-                type: 'CHAT_MESSAGE',
-                text: message,
-                sender: playerArmyColor // Include sender's army color
-            };
-            ws.send(JSON.stringify(chatMessage));
-            originalConsoleLog(`[sendChatMessage] Sent CHAT_MESSAGE to server: "${message}"`);
-        } else {
-            // This case is for multiplayer but WS is not open (e.g., disconnected)
-            console.warn("Cannot send message: server connection not established.");
-            originalConsoleWarn(`[sendChatMessage] Cannot send message "${message}": WebSocket not open.`);
-        }
-        // *** END WebSocket sending ***
-
-
-        chatInput.value = ''; // Clear the input field after sending
-        chatInput.focus(); // Keep focus on the input field
-    }
-}
-

@@ -2,6 +2,8 @@
 let gameOver = false; // Flag to indicate if the game has ended
 // *** END NEW ***
 
+let messageChat = null;
+
 // *** NEW : Synchronization sequence number ***
 let syncSequenceNumber = 0; // For Blue player: Incremented for each STATE_SYNC sent
 let lastReceivedSyncSequenceNumber = -1; // For Red player: Tracks the last processed sequence number
@@ -521,6 +523,49 @@ function stopSyncInterval() {
         originalConsoleLog("[stopSyncInterval] Stopping state synchronization interval.");
         clearInterval(syncIntervalId);
         syncIntervalId = null;
+    }
+}
+
+
+/*
+ * Reads the message from the chat input, appends it to the console output, and clears the input.
+ * This version sends the message to the server via WebSocket for multiplayer chat.
+ * Accesses global consoleOutputDiv, chatInput, ws, playerArmyColor.
+ */
+function sendChatMessage() {
+    messageChat = null;
+    const chatInput = document.getElementById('chatInput'); // Get the element inside the function too for safety
+    if (!chatInput || !consoleOutputDiv) {
+        originalConsoleWarn("[sendChatMessage] Chat input or console output div not found.");
+        return;
+    }
+
+    const message = chatInput.value.trim(); // Get message and remove leading/trailing whitespace
+
+    if (message) { // Only send non-empty messages
+        // Display the message in the local console immediately with player's army color
+        const senderColor = playerArmyColor ? (playerArmyColor === ARMY_COLOR_BLUE ? 'Blue' : 'Red') : 'Player'; // Use playerArmyColor if set
+        console.log(`${senderColor}: ${message}`);
+
+        // *** For multiplayer, send this message via WebSocket: ***
+        if (ws && ws.readyState === WebSocket.OPEN) { // Only send if connected and player color is assigned
+            const chatMessage = {
+                type: 'CHAT_MESSAGE',
+                text: message,
+                sender: playerArmyColor // Include sender's army color
+            };
+            ws.send(JSON.stringify(chatMessage));
+            originalConsoleLog(`[sendChatMessage] Sent CHAT_MESSAGE to server: "${message}"`);
+        } else {
+            // This case is for multiplayer but WS is not open (e.g., disconnected)
+            console.warn("Cannot send message: server connection not established.");
+            originalConsoleWarn(`[sendChatMessage] Cannot send message "${message}": WebSocket not open.`);
+        }
+        // *** END WebSocket sending ***
+
+
+        chatInput.value = ''; // Clear the input field after sending
+        chatInput.focus(); // Keep focus on the input field
     }
 }
 
