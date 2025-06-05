@@ -15,7 +15,7 @@ Units and Terrain:
 - Each unit has different movement costs depending on the terrain (Plains, Hill, Forest, Swamp). Mountains and Lakes are impassable.
 - Units have HP, a vision range, and a combat range/strength.
 - Supply units heal friendly units in friendly adjacent hexes.
-- Spy units have a large vision range and ignore terrain costs.
+- Scout units have a large vision range and ignore terrain costs.
 
 Combat:
 - Combat is resolved automatically when enemy units are within mutual range.
