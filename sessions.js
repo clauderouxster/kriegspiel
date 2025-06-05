@@ -1,3 +1,10 @@
+/*
+ * sessions.js
+ * Contient des fonctions utilitaires pour charger ou sauvegarder une partie en cours
+ 
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
+ */
 
 // ============================================================================
 // Save and Load Game Logic (Local Save/Load - less priority in MP)

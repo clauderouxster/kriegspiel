@@ -1,3 +1,10 @@
+/*
+ * combat.js
+ * Contient des fonctions utilitaires pour gérer les combats
+ 
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
+ */
 
 // ============================================================================
 // Combat Logic (Only executed on the Blue client)

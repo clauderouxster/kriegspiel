@@ -1,6 +1,6 @@
 /*
- * utils.js
- * Contient des fonctions utilitaires générales pour le serveur
+ * localserver.js
+ * Contient des fonctions utilitaires générales pour un serveur local
  
  * Copyright 2025-present Claude ROUX
  * The 3-Clause BSD License

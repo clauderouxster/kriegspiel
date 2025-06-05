@@ -1,3 +1,11 @@
+/*
+ * serverEvents.js
+ * Contient des fonctions utilitaires générales pour gérer les événements serveur
+ 
+ * Copyright 2025-present Claude ROUX
+ * The 3-Clause BSD License
+ */
+
 // *** NEW : Variable to track game state (finished or not) ***
 let gameOver = false; // Flag to indicate if the game has ended
 // *** END NEW ***
