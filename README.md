@@ -1,4 +1,4 @@
-# Preußenkriegsspiel
+# Preussenkriegsspiel (Preußenkriegsspiel: Prussian War Game)
 ![Battle](https://github.com/clauderouxster/kriegspiel/blob/main/resources/battle.png)
 A war game in JavaScript that can be launched through node.js
 
@@ -28,9 +28,9 @@ Multiplayer:
 - Movements and combat results are synchronized via the server.
 
 
-## Playing Preußenkriegsspiel Map Over a Network
+## Playing Preussenkriegsspiel Map Over a Network
 
-Preußenkriegsspiel Map supports multiplayer gameplay, with one player acting as the "Blue" army and the other as the "Red" army. The game logic for movements and combat resolution is primarily handled by the **Blue player's client**.
+Preussenkriegsspiel Map supports multiplayer gameplay, with one player acting as the "Blue" army and the other as the "Red" army. The game logic for movements and combat resolution is primarily handled by the **Blue player's client**.
 
 To facilitate network play, you'll need to set up a server using Node.js and, for internet play, potentially Ngrok.
 
@@ -47,12 +47,12 @@ To play over a local network (e.g., two computers connected to the same Wi-Fi or
 
 **Server Setup (Host Machine - e.g., Blue Player's machine or a dedicated server):**
 
-1.  **Navigate to the game directory**: Open your terminal or command prompt and navigate to the directory where your Preußenkriegsspiel Map game files are located.
+1.  **Navigate to the game directory**: Open your terminal or command prompt and navigate to the directory where your Preussenkriegsspiel Map game files are located.
 2.  **Start the local server**: Run the command:
     ```bash
     node localserver.js
     ```
-    You should see output similar to: `Preußenkriegsspiel Map WebSocket server started on port 6060`.
+    You should see output similar to: `Preussenkriegsspiel Map WebSocket server started on port 6060`.
 
 **Client Connection (Both Players):**
 
@@ -79,7 +79,7 @@ To play over the internet, you'll need to expose your local server to the public
     ```bash
     node server.js
     ```
-    This server will serve the game files and handle WebSocket connections. You should see `Preußenkriegsspiel Map WebSocket server started on port 6060`.
+    This server will serve the game files and handle WebSocket connections. You should see `Preussenkriegsspiel Map WebSocket server started on port 6060`.
 4.  **Expose the server with Ngrok**: Open a *new* terminal or command prompt window in the directory where you unzipped Ngrok (or where the `ngrok` executable is located). Then, run the command:
     ```bash
     ./ngrok http 6060
@@ -116,7 +116,7 @@ Crucially, **movements and combat resolution are handled by the Blue player's cl
 BSD 3-Clause License
 
 ```
-Preußenkriegsspiel
+Preussenkriegsspiel
 Copyright (c) 2025-present Claude ROUX
 
 Redistribution and use in source and binary forms, with or without 
