@@ -61,7 +61,7 @@ To play over a local network (e.g., two computers connected to the same Wi-Fi or
     * **macOS/Linux**: Open Terminal and type `ifconfig` or `ip a`. Look for the IP address associated with your active network interface (e.g., `en0`, `eth0`, `wlan0`).
 2.  **Open the Game in a Web Browser**: On both the Blue and Red player's computers, open a web browser (e.g., Chrome, Firefox) and navigate to:
     ```
-    http://[SERVER_IP_ADDRESS]:6060/index.html
+    http://[SERVER_IP_ADDRESS]:5500/index.html
     ```
     Replace `[SERVER_IP_ADDRESS]` with the actual local IP address of the server machine.
 
