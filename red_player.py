@@ -159,11 +159,11 @@ def generate_map_encoding(current_map, units, rows, cols, combat_hex_set, unit_i
     """
     Generates a list of strings, where each string represents a row
     and tiles are separated by a space.
-    Encoding for each tile: TUICHF
+    Encoding for each tile: TCIUHF
     T: Terrain initial (F, M, H, S, L, R)
-    I: Unit Id as one character
-    U: Unit initial (C, I, A, S, U, G)
     C: Color initial (B, R)
+    I: Unit Numerical Id over 3 digits
+    U: Unit initial (C, I, A, S, U, G)
     H: Health (1-9)
     F: Fight ('F' or '')
     Example: "HCR5F" for Red Cavalry on Hill with 5 health in fight.
@@ -190,14 +190,15 @@ def generate_map_encoding(current_map, units, rows, cols, combat_hex_set, unit_i
             unit_on_hex = unit_positions.get((r, c))
 
             if unit_on_hex:
-                # U: Unit Initial
-                unit_on_tile = UNIT_INITIALS.get(unit_on_hex['type'], '?')
+                # C: Color Initial
+                unit_on_tile = COLOR_INITIALS.get(unit_on_hex['armyColor'], '?')
 
                 #I: Id as one character
-                unit_on_tile += unit_indexes[unit_on_hex["id"]]
+                id = unit_on_hex["id"]
+                unit_on_tile += f"{id:03d}"
 
-                # C: Color Initial
-                unit_on_tile += COLOR_INITIALS.get(unit_on_hex['armyColor'], '?')
+                # U: Unit Initial
+                unit_on_tile += UNIT_INITIALS.get(unit_on_hex['type'], '?')
 
                 # H: Health (1-9)
                 health = math.floor(unit_on_hex['health'])
@@ -210,7 +211,8 @@ def generate_map_encoding(current_map, units, rows, cols, combat_hex_set, unit_i
                 hex_string += unit_on_tile
 
                 unit_on_tile = terrain + unit_on_tile
-                unit_code_indexing[unit_on_tile] = (r,c)
+                if id in unit_indexes:
+                    unit_code_indexing[unit_on_tile] = (r,c)
 
             current_row_hexes.append(hex_string)
         encoded_map_rows.append(" ".join(current_row_hexes)) # Join hexes in the row with a space
@@ -264,24 +266,20 @@ async def handle_messages(websocket):
 
                     # Update local units list, filtering out units not belonging to Red player
                     # and ensuring health is above 0 if applicable (though Blue handles elimination)
-                    updated_units = []
-                    for unit_data in units_data:
-                        if unit_data.get('armyColor') == player_army_color:
-                            updated_units.append(unit_data)
-
-                    current_units = updated_units
                     units_indexes = {}
-                    for unit_data in current_units:
+                    for unit_data in units_data:
                         id  = unit_data["id"]
-                        idx = id - len(current_units) + 34
-                        units_indexes[id] = chr(idx)
-                        
+                        if unit_data.get('armyColor') == player_army_color:
+                            units_indexes[id] = f"{id:03d}"
+
+                    current_units = units_data
+
                     # Call the encoding function and print the result
                     encoded_map_rows = generate_map_encoding(game_map, current_units, current_map_rows, current_map_cols, combat_hexes, units_indexes)
                     print(f"--- Map State (Seq: {received_sequence_number}, Time: {game_time_in_minutes} min) --- {len(current_units)} ---")
-                    #for row_string in encoded_map_rows:
-                    #    print(row_string)
-                    #print("--- End Map State ---")
+                    for row_string in encoded_map_rows:
+                        print(row_string)
+                    print("--- End Map State ---")
                     print(unit_code_indexing)
 
 
