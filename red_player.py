@@ -4,7 +4,9 @@ import json
 import random
 import math # For math.floor
 import collections # For deque, which is efficient for queue operations
+import sys
 
+FILE_NAME = ""
 # --- Constants (mirroring JavaScript constants for logic consistency) ---
 # Terrain types
 TERRAIN_FLAT = 0
@@ -27,6 +29,8 @@ UNIT_GENERAL = 5
 # Army colors (using simple strings for Python, match JS for logic)
 ARMY_COLOR_BLUE = '#0000FF'
 ARMY_COLOR_RED = '#FF0000'
+
+ARMY_BLUE_NUMBER = -1
 
 # Movement Costs per hex terrain type for each unit type
 # Infinity means impassable. This should match constants.js
@@ -318,9 +322,86 @@ def generate_map_encoding(current_map, units, rows, cols, combat_hex_set, unit_i
     return encoded_map_rows
 
 # --- Main WebSocket Client Logic ---
+# Ces constantes sont supposées être disponibles globalement ou définies ailleurs dans red_player.py
+# Elles sont incluses ici pour la clarté du contexte de la fonction de score.
+UNIT_INFANTERY = 0
+UNIT_ARTILLERY = 1
+UNIT_CAVALRY = 2
+UNIT_SUPPLY = 3
+UNIT_SCOUT = 4
+UNIT_GENERAL = 5
+
+ARMY_COLOR_RED = '#FF0000' # Couleur de l'armée Rouge (devrait correspondre à celle de red_player.py)
+ARMY_COLOR_BLUE = '#0000FF' # Couleur de l'armée Bleue (devrait correspondre à celle de red_player.py)
+
+
+def calculate_score(outcome, game_time_in_minutes, current_units, player_army_color, initial_blue_units_count):
+    """
+    Calcule le score de la partie pour le joueur Rouge, en incluant un bonus pour les unités bleues détruites.
+
+    Args:
+        outcome (str): Le résultat de la partie ('red_wins', 'blue_wins', ou autre si défaite).
+        game_time_in_minutes (int): Le temps de jeu écoulé en minutes.
+        current_units (list): Liste des dictionnaires d'unités présentes sur la carte à la fin de la partie.
+                              Chaque dictionnaire d'unité contient au moins 'type', 'armyColor', 'health'.
+        player_army_color (str): La couleur de l'armée du joueur (doit être ARMY_COLOR_RED).
+        initial_blue_units_count (int): Le nombre total d'unités bleues au début de la partie.
+                                        Cette valeur doit être suivie et passée par la fonction appelante
+                                        (par exemple, par handle_messages au premier STATE_SYNC).
+
+    Returns:
+        int: Le score calculé.
+    """
+    # Valeurs des unités pour le calcul du score en cas de défaite, basées sur la hiérarchie fournie.
+    UNIT_SCORE_VALUES = {
+        UNIT_SUPPLY: 10,
+        UNIT_SCOUT: 20,
+        UNIT_INFANTERY: 30,
+        UNIT_CAVALRY: 40,
+        UNIT_ARTILLERY: 50,
+        UNIT_GENERAL: 100
+    }
+
+    MAX_WIN_SCORE = 10000
+    BASE_DEFEAT_SCORE = 50  # Score de base pour toute défaite, pour reconnaître la participation
+    TIME_BONUS_PER_MINUTE = 1.0 # Points ajoutés par minute de jeu en cas de défaite (pour récompenser la durée)
+    BLUE_UNIT_DESTRUCTION_BONUS_PER_UNIT = 75 # Points gagnés par unité bleue détruite
+
+    # Calculer le nombre d'unités bleues restantes
+    remaining_blue_units_count = sum(1 for unit in current_units if unit and unit.get('armyColor') == ARMY_COLOR_BLUE and unit.get('health', 0) > 0)
+    
+    # Calculer le nombre d'unités bleues détruites
+    # On assume que initial_blue_units_count est le nombre total d'unités bleues au départ
+    # et que remaining_blue_units_count est le nombre d'unités bleues encore en vie à la fin.
+    blue_units_destroyed = max(0, initial_blue_units_count - remaining_blue_units_count)
+    blue_destruction_bonus = blue_units_destroyed * BLUE_UNIT_DESTRUCTION_BONUS_PER_UNIT
+
+    if outcome == 'red_wins':
+        # Score maximum plus bonus pour les unités bleues détruites
+        final_score = MAX_WIN_SCORE + blue_destruction_bonus
+        return int(final_score)
+    else: # Implique une défaite pour le joueur Rouge ou un autre résultat non gagnant
+        remaining_red_units_score = 0
+        for unit in current_units:
+            # Vérifier si l'unité appartient à l'armée du joueur et a une santé supérieure à 0
+            if unit and unit.get('armyColor') == player_army_color and unit.get('health', 0) > 0:
+                unit_type = unit.get('type')
+                # Ajouter la valeur de l'unité au score, 0 si le type d'unité est inconnu
+                remaining_red_units_score += UNIT_SCORE_VALUES.get(unit_type, 0) 
+
+        # Calculer le bonus de temps basé sur la durée de la partie
+        time_bonus = game_time_in_minutes * TIME_BONUS_PER_MINUTE
+        
+        # Le score final en cas de défaite est la somme du score de base,
+        # des points des unités rouges restantes, du bonus de temps,
+        # et du bonus pour les unités bleues détruites.
+        final_score = BASE_DEFEAT_SCORE + remaining_red_units_score + time_bonus + blue_destruction_bonus
+        final_score = final_score/100
+        
+        return final_score
 
 async def handle_messages(websocket):
-    global game_map, current_units, player_army_color, game_time_in_minutes, \
+    global game_map, current_units, player_army_color, game_time_in_minutes, ARMY_BLUE_NUMBER, \
            current_map_rows, current_map_cols, last_received_sync_sequence_number, game_over, combat_hexes
 
     async for message in websocket:
@@ -366,10 +447,16 @@ async def handle_messages(websocket):
                     # Update local units list, filtering out units not belonging to Red player
                     # and ensuring health is above 0 if applicable (though Blue handles elimination)
                     units_indexes = {}
+                    count_blue = 0
                     for unit_data in units_data:
                         id  = unit_data["id"]
                         if unit_data.get('armyColor') == player_army_color:
                             units_indexes[id] = f"{id:03d}"
+                        else:
+                            count_blue += 1
+
+                    if ARMY_BLUE_NUMBER == -1:
+                        ARMY_BLUE_NUMBER = count_blue
 
                     current_units = units_data
 
@@ -377,10 +464,10 @@ async def handle_messages(websocket):
                     # Call the encoding function and print the result
                     encoded_map_rows = generate_map_encoding(game_map, current_units, current_map_rows, current_map_cols, combat_hexes, units_indexes)
                     print(f"--- Map State (Seq: {received_sequence_number}, Time: {game_time_in_minutes} min) --- {len(current_units)} ---")
-                    for row_string in encoded_map_rows:
-                        print(row_string)
-                    print("--- End Map State ---")
-                    print(unit_code_indexing)
+                    #for row_string in encoded_map_rows:
+                    #    print(row_string)
+                    #print("--- End Map State ---")
+                    #print(unit_code_indexing)
 
 
             elif message_type == 'COMBAT_RESULT':
@@ -392,7 +479,10 @@ async def handle_messages(websocket):
 
             elif message_type == 'GAME_OVER':
                 outcome = data.get('outcome')
-                print(f"GAME OVER! Outcome: {outcome}")
+                final_game_score = calculate_score(outcome, game_time_in_minutes, current_units, player_army_color, ARMY_BLUE_NUMBER)
+                print(f"GAME OVER! Outcome: {outcome}: {final_game_score}")
+                with open('scores.txt', 'a') as f:
+                    f.write(f"{FILE_NAME}: {final_game_score}\n")
                 game_over = True
                 await websocket.close()
 
@@ -414,68 +504,7 @@ async def handle_messages(websocket):
             print(f"Received malformed JSON: {message}")
         except Exception as e:
             print(f"Error processing message: {e}")
-
-async def send_move_orders(websocket):
-    global game_over
-
-    while not game_over:
-        if current_units and game_map:
-            # Find only units belonging to this player (Red)
-            red_units = [unit for unit in current_units if unit.get('armyColor') == player_army_color]
-
-            # Shuffle the units to ensure a different set might move each interval
-            random.shuffle(red_units)
-
-            orders_sent = 0
-            for unit_to_move in red_units:
-                if orders_sent >= MAX_ORDERS_PER_INTERVAL:
-                    break # Stop if we've sent enough orders for this interval
-
-                unit_id = unit_to_move.get('id')
-                current_r = unit_to_move.get('row')
-                current_c = unit_to_move.get('col')
-                unit_type = unit_to_move.get('type')
-
-                # Get valid neighbors
-                possible_targets = []
-                for nr, nc in get_neighbors(current_r, current_c, current_map_rows, current_map_cols):
-                    try:
-                        terrain_type = game_map[nr][nc]
-                        # Check if terrain is passable for the unit type
-                        if calculate_move_duration_game_minutes(unit_type, terrain_type) != float('inf'):
-                            possible_targets.append((nr, nc))
-                    except IndexError:
-                        pass # Ignore out-of-bounds neighbors
-
-                if possible_targets:
-                    # Choose a random valid adjacent target hex
-                    target_r, target_c = random.choice(possible_targets)
-
-                    move_order = {
-                        'type': 'MOVE_ORDER',
-                        'unitId': unit_id,
-                        'targetR': target_r,
-                        'targetC': target_c
-                    }
-                    try:
-                        await websocket.send(json.dumps(move_order))
-                        print(f"Sent MOVE_ORDER for unit {unit_id} to ({target_r}, {target_c})")
-                        orders_sent += 1
-                    except websockets.exceptions.ConnectionClosedOK:
-                        print("Connection closed, cannot send move order.")
-                        game_over = True
-                        break
-                    except Exception as e:
-                        print(f"Error sending move order for unit {unit_id}: {e}")
-                else:
-                    # print(f"Unit {unit_id} at ({current_r}, {current_c}) has no valid adjacent moves.")
-                    pass # This unit cannot move right now
-        else:
-            # print("Waiting for initial game state and units...")
-            pass # No map or units yet
-
-        await asyncio.sleep(MOVE_ORDER_INTERVAL_SECONDS) # Wait for the next batch
-
+         
 async def main():
     max_retries = 5
     retries = 0
@@ -512,4 +541,11 @@ async def main():
         print(f"Failed to connect after {max_retries} retries. Please ensure the server is running.")
 
 if __name__ == "__main__":
+    # Charger et exécuter le code généré
+    FILE_NAME = sys.argv[1]
+    with open(FILE_NAME, 'r') as f:
+        code_genere = f.read()
+
+    # Exécuter dans l'espace de noms global actuel
+    exec(code_genere, globals())
     asyncio.run(main())
