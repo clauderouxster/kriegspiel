@@ -3,6 +3,7 @@ import websockets
 import json
 import random
 import math # For math.floor
+import collections # For deque, which is efficient for queue operations
 
 # --- Constants (mirroring JavaScript constants for logic consistency) ---
 # Terrain types
@@ -12,6 +13,7 @@ TERRAIN_HILL = 2
 TERRAIN_SWAMP = 3
 TERRAIN_LAKE = 4
 TERRAIN_FOREST = 5
+TERRAIN_BASE = 6
 TERRAIN_UNASSIGNED = -1
 
 # Unit types
@@ -55,6 +57,16 @@ TERRAIN_MOVEMENT_COSTS = {
     }
 }
 
+# Vision Ranges per unit type (distance in hexes)
+VISION_RANGES = {
+    UNIT_ARTILLERY: { TERRAIN_BASE: 4, TERRAIN_HILL: 6}, 
+    UNIT_INFANTERY: { TERRAIN_BASE: 4, TERRAIN_HILL: 6, TERRAIN_MOUNTAIN: 8 }, 
+    UNIT_CAVALRY: { TERRAIN_BASE: 4, TERRAIN_HILL: 6 },
+    UNIT_SUPPLY: { TERRAIN_BASE: 2 }, 
+    UNIT_SCOUT: { TERRAIN_BASE: 5, TERRAIN_HILL: 10, TERRAIN_MOUNTAIN: 15 },
+    UNIT_GENERAL: { TERRAIN_BASE: 7, TERRAIN_HILL: 12, TERRAIN_MOUNTAIN: 17 } 
+}
+
 UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR = {
     UNIT_INFANTERY: 4,
     UNIT_ARTILLERY: 3,
@@ -63,6 +75,8 @@ UNIT_BASE_MOVEMENT_CAPABILITY_PER_HOUR = {
     UNIT_SCOUT: 7,
     UNIT_GENERAL: 5
 }
+
+visible_hexes = []
 
 # --- AI Configuration ---
 # Maximum number of move orders to send per batch/interval
@@ -155,6 +169,87 @@ COLOR_INITIALS = {
     ARMY_COLOR_RED: 'R'
 }
 
+def is_valid(r, c, rows, cols):
+    """Checks if the given row and column are within the map boundaries."""
+    return 0 <= r < rows and 0 <= c < cols
+
+def update_visibility(game_map, current_units, current_map_rows, current_map_cols, player_army_color):
+    """
+    Calculates and updates the visible hexes based on unit positions and vision ranges
+    for the *local player's army*.
+    """
+    global visible_hexes
+
+    # Initialize visible_hexes array
+    if current_map_rows == 0 or current_map_cols == 0:
+        print("[update_visibility] Map dimensions not initialized. Cannot calculate visibility.")
+        return
+
+    visible_hexes = [[False for _ in range(current_map_cols)] for _ in range(current_map_rows)]
+
+    if not game_map or not current_units:
+        print(f"[update_visibility] Map or units not initialized. No visibility calculated via BFS.")
+    else:
+        player_units = [unit for unit in current_units if unit and unit.get('armyColor') == player_army_color and unit.get('health', 0) > 0]
+
+        for unit in player_units:
+            if not unit:
+                continue
+
+            unit_r = unit['row']
+            unit_c = unit['col']
+            unit_type = unit['type']
+
+            if not is_valid(unit_r, unit_c, current_map_rows, current_map_cols):
+                print(f"[update_visibility] Skipping visibility for invalid unit position at ({unit_r}, {unit_c}) for unit ID {unit.get('id')}.")
+                continue
+
+            terrain_at_unit_hex = game_map[unit_r][unit_c]
+
+            # --- MODIFIED PART FOR VISION_RANGES ---
+            vision_range_info = VISION_RANGES.get(unit_type)
+            # Start with the base vision range
+            vision_range = vision_range_info.get(TERRAIN_BASE, 0) if vision_range_info else 0
+
+            # Apply terrain bonus based on specific terrain keys
+            if terrain_at_unit_hex == TERRAIN_HILL:
+                # Use TERRAIN_HILL as the key
+                vision_range = vision_range_info.get(TERRAIN_HILL, vision_range) if vision_range_info else vision_range
+            elif terrain_at_unit_hex == TERRAIN_MOUNTAIN:
+                # Use TERRAIN_MOUNTAIN as the key
+                vision_range = vision_range_info.get(TERRAIN_MOUNTAIN, vision_range) if vision_range_info else vision_range
+            # --- END MODIFIED PART ---
+
+            # Use BFS to mark all hexes within the calculated vision range as visible
+            queue = collections.deque([(unit_r, unit_c, 0)])
+            visited = set()
+            visited.add(f"{unit_r},{unit_c}")
+
+            while queue:
+                r, c, dist = queue.popleft()
+
+                if is_valid(r, c, current_map_rows, current_map_cols):
+                    visible_hexes[r][c] = True
+                else:
+                    continue
+
+                if dist < vision_range:
+                    neighbors = get_neighbors(r, c, current_map_rows, current_map_cols)
+                    for nr, nc in neighbors:
+                        neighbor_key = f"{nr},{nc}"
+                        if neighbor_key not in visited and is_valid(nr, nc, current_map_rows, current_map_cols):
+                            visited.add(neighbor_key)
+                            queue.append((nr, nc, dist + 1))
+
+    # Ensure hexes with player units are visible
+    if current_units:
+        for unit in current_units:
+            if unit and unit.get('armyColor') == player_army_color and unit.get('health', 0) > 0:
+                if is_valid(unit['row'], unit['col'], current_map_rows, current_map_cols):
+                    visible_hexes[unit['row']][unit['col']] = True
+                else:
+                    print(f"[update_visibility] Unit ID {unit.get('id')} at invalid position ({unit['row']}, {unit['col']}) while ensuring visibility.")
+
 def generate_map_encoding(current_map, units, rows, cols, combat_hex_set, unit_indexes):
     """
     Generates a list of strings, where each string represents a row
@@ -166,11 +261,12 @@ def generate_map_encoding(current_map, units, rows, cols, combat_hex_set, unit_i
     U: Unit initial (C, I, A, S, U, G)
     H: Health (1-9)
     F: Fight ('F' or '')
-    Example: "HCR5F" for Red Cavalry on Hill with 5 health in fight.
+    Example: "HR110C5F" for Red Cavalry on Hill with 5 health in fight.
              "M" for Mountain terrain with no unit or fight.
     """
 
-    global unit_code_indexing
+    global unit_code_indexing, visible_hexes
+
     encoded_map_rows = []
     unit_positions = {(unit['row'], unit['col']): unit for unit in units}
 
@@ -180,39 +276,42 @@ def generate_map_encoding(current_map, units, rows, cols, combat_hex_set, unit_i
         current_row_hexes = []
         for c in range(cols):
             hex_string = ""
-            terrain_type = current_map[r][c] if 0 <= r < len(current_map) and 0 <= c < len(current_map[r]) else TERRAIN_UNASSIGNED
-            
-            # T: Terrain Initial
-            terrain = TERRAIN_INITIALS.get(terrain_type, 'X') # Default to 'X' for unknown
-            hex_string += terrain
-
-            # Check for Unit at this hex
-            unit_on_hex = unit_positions.get((r, c))
-
-            if unit_on_hex:
-                # C: Color Initial
-                unit_on_tile = COLOR_INITIALS.get(unit_on_hex['armyColor'], '?')
-
-                #I: Id as one character
-                id = unit_on_hex["id"]
-                unit_on_tile += f"{id:03d}"
-
-                # U: Unit Initial
-                unit_on_tile += UNIT_INITIALS.get(unit_on_hex['type'], '?')
-
-                # H: Health (1-9)
-                health = math.floor(unit_on_hex['health'])
-                health_char = str(min(max(1, health), 9)) # Cap health between 1 and 9
-                unit_on_tile += health_char
+            if visible_hexes[r][c] == False:
+                hex_string = "0"
+            else:
+                terrain_type = current_map[r][c] if 0 <= r < len(current_map) and 0 <= c < len(current_map[r]) else TERRAIN_UNASSIGNED
                 
-                # F: Fight
-                if f"{r},{c}" in combat_hex_set:
-                    unit_on_tile += 'F'                
-                hex_string += unit_on_tile
+                # T: Terrain Initial
+                terrain = TERRAIN_INITIALS.get(terrain_type, 'X') # Default to 'X' for unknown
+                hex_string += terrain
 
-                unit_on_tile = terrain + unit_on_tile
-                if id in unit_indexes:
-                    unit_code_indexing[unit_on_tile] = (r,c)
+                # Check for Unit at this hex
+                unit_on_hex = unit_positions.get((r, c))
+
+                if unit_on_hex:
+                    # C: Color Initial
+                    unit_on_tile = COLOR_INITIALS.get(unit_on_hex['armyColor'], '?')
+
+                    #I: Id as one character
+                    id = unit_on_hex["id"]
+                    unit_on_tile += f"{id:03d}"
+
+                    # U: Unit Initial
+                    unit_on_tile += UNIT_INITIALS.get(unit_on_hex['type'], '?')
+
+                    # H: Health (1-9)
+                    health = math.floor(unit_on_hex['health'])
+                    health_char = str(min(max(1, health), 9)) # Cap health between 1 and 9
+                    unit_on_tile += health_char
+                    
+                    # F: Fight
+                    if f"{r},{c}" in combat_hex_set:
+                        unit_on_tile += 'F'                
+                    hex_string += unit_on_tile
+
+                    unit_on_tile = terrain + unit_on_tile
+                    if id in unit_indexes:
+                        unit_code_indexing[unit_on_tile] = (r,c)
 
             current_row_hexes.append(hex_string)
         encoded_map_rows.append(" ".join(current_row_hexes)) # Join hexes in the row with a space
@@ -274,6 +373,7 @@ async def handle_messages(websocket):
 
                     current_units = units_data
 
+                    update_visibility(game_map, current_units, current_map_rows, current_map_cols, player_army_color)
                     # Call the encoding function and print the result
                     encoded_map_rows = generate_map_encoding(game_map, current_units, current_map_rows, current_map_cols, combat_hexes, units_indexes)
                     print(f"--- Map State (Seq: {received_sequence_number}, Time: {game_time_in_minutes} min) --- {len(current_units)} ---")
