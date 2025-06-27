@@ -1,0 +1,14 @@
+red_player.py is a Python code that control the RED player in a JS game, where the server is handled in a node.js.
+
+We want the RED player to be controlled by a LLM. The goal of this LLM is to propose different functions to execute *send_move_orders*.
+For the moment: send_move_orders works in a random way.  
+
+Here is your objective:
+
+The LLM will provide different versions of this *send_move_orders*, each which will be tested in combat. We will then score each of these functions according to whether RED win or loose. 
+When RED looses, we will compute a score based on the number of units lost, and the time it took for the LLM to loose.
+We will then store this function with its score in a file.
+
+Propose a prompt that we could use to generate these different *send_move_orders*.
+
+
